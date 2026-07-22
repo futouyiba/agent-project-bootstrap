@@ -27,7 +27,7 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 
 - The user does not need to know an Issue number. Search the fresh local snapshot and GitHub from their description.
 - For one clear match, select it and report its number. For several plausible matches, show the best two or three and ask one question.
-- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管这个项目` as workflow shortcuts described by `agent-project-bootstrap`.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管` as workflow shortcuts described by `agent-project-bootstrap`. Bare `托管` means the current repository and current explicit goal, active Issue, or active PR; ask only when that scope is ambiguous.
 
 ## Standing authorization
 
