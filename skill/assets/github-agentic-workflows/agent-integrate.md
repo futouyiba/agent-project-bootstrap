@@ -40,7 +40,7 @@ safe-outputs:
     target: "*"
     max: 1
   add-labels:
-    allowed: [agent:merge-ready, agent:needs-rework, agent:needs-human]
+    allowed: [agent:merge-ready, agent:needs-rework, needs:human]
     target: "*"
     max: 1
   remove-labels:
@@ -64,5 +64,5 @@ Never call a merge API, enable auto-merge, deploy, publish, delete, or change
 scope. If every gate passes, keep `agent:merge-ready` and add one concise comment
 with the verified head SHA and evidence. If a routine code or CI correction is
 needed, remove `agent:merge-ready` and add `agent:needs-rework`. If a human gate
-is reached, remove `agent:merge-ready`, add `agent:needs-human`, and state the
+is reached, remove `agent:merge-ready`, add `needs:human`, and state the
 exact decision required.

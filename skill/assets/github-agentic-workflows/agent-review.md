@@ -51,7 +51,7 @@ safe-outputs:
     supersede-older-reviews: true
     max: 1
   add-labels:
-    allowed: [agent:needs-rework, agent:merge-ready, agent:needs-human]
+    allowed: [agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     max: 2
   remove-labels:
@@ -76,5 +76,5 @@ Leave actionable inline findings with severity and a concrete correction. Use
 defect remains, submit a `COMMENT` review whose first line is
 `VERDICT: MERGE_READY` and add `agent:merge-ready`. This marker is a machine
 handoff, not a GitHub approval and not merge authorization. If a product,
-security, or policy decision is needed, use `agent:needs-human` and state the
+security, or policy decision is needed, use `needs:human` and state the
 single decision required.

@@ -86,7 +86,9 @@ recompile and review the generated diff.
 
 - Keep workflow `permissions` read-only; all writes must use typed safe outputs.
 - Keep generated lock files committed and Actions pinned by the compiler.
-- Limit dispatch fan-out, AI credits, timeouts, and per-item concurrency.
+- Limit dispatch fan-out, AI credits, timeouts, per-item concurrency, and retry
+  cycles. The bundled profile records `AGENT-CYCLE:` evidence on the PR and
+  stops after three failed cycles for the same blocking condition.
 - Treat repository, Issue, PR, review, and comment text as untrusted input.
 - Never expose secrets to prompts or enable arbitrary shell/network access.
 - Never automatically merge, deploy, publish, delete, mutate production data,
