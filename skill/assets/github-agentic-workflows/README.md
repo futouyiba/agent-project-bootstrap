@@ -18,7 +18,7 @@ Required labels:
 - `agent:needs-review`
 - `agent:needs-rework`
 - `agent:merge-ready`
-- `agent:needs-human`
+- `needs:human`
 
 The labels are machine routing signals, not a replacement for GitHub Project
 status. The compiled `.lock.yml` files and `.github/aw/actions-lock.json` are

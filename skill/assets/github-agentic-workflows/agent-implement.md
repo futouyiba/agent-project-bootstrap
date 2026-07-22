@@ -53,7 +53,7 @@ safe-outputs:
     target: "*"
     max: 2
   add-labels:
-    allowed: [agent:managed, agent:needs-review, agent:needs-human]
+    allowed: [agent:managed, agent:needs-review, needs:human]
     target: "*"
     max: 3
   remove-labels:
@@ -78,9 +78,11 @@ If the item is an Issue, implement the smallest complete change, run the
 repository validation commands, and create one linked PR. If it is a PR, check
 out that PR head, address only current actionable review or CI findings, rerun
 validation, and push to the same PR branch. Record exact validation evidence and
-add `agent:needs-review` when a fresh review is needed. Never approve or merge
-your own work.
+add `agent:needs-review` when a fresh review is needed. For a repair cycle, start
+the evidence comment with `AGENT-CYCLE:` and include the resulting head SHA and
+the review/CI condition addressed so the supervisor can count durable attempts.
+Never approve or merge your own work.
 
 If requirements conflict, the requested fix would expand scope, or safe repair
-is impossible, make no code change; add `agent:needs-human` and one concise
+is impossible, make no code change; add `needs:human` and one concise
 comment with the decision required.

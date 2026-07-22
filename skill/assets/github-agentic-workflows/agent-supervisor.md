@@ -20,6 +20,8 @@ on:
     workflows: [__CI_WORKFLOW__]
     types: [completed]
     branches: [__DEFAULT_BRANCH__]
+  roles: [admin, maintainer, write]
+  bots: ["github-actions[bot]", "copilot[bot]"]
 
 permissions:
   actions: read
@@ -46,11 +48,11 @@ safe-outputs:
     target: "*"
     max: 2
   add-labels:
-    allowed: [agent:managed, agent:needs-review, agent:needs-rework, agent:merge-ready, agent:needs-human]
+    allowed: [agent:managed, agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     max: 3
   remove-labels:
-    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, agent:needs-human]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     max: 3
 ---
@@ -79,9 +81,11 @@ Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 duplicate work when a run is already active. If a PR already has current-head
 merge-readiness evidence and still carries `agent:merge-ready`, treat it as a
 terminal handoff and do nothing until its head or GitHub gate state changes. If
-an item already carries `agent:needs-human`, do not repeat the escalation or
+an item already carries `needs:human`, do not repeat the escalation or
 dispatch work until a new authorized human response resolves the recorded gate.
-If product scope, security, cost,
-data migration, merge policy, or repeated failure needs a human decision, add
-`agent:needs-human` and one concise comment containing the exact decision needed.
+Count completed implementation/review/CI repair cycles from PR comments, reviews,
+workflow runs, and head SHAs. After three failed cycles for the same blocking
+condition, stop dispatching workers. If product scope, security, cost, data
+migration, merge policy, or that retry limit needs a human decision, add
+`needs:human` and one concise comment containing the exact decision needed.
 If nothing is actionable, emit no write or dispatch output.

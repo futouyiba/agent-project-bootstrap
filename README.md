@@ -199,7 +199,7 @@ gh aw compile --strict
 
 第一次生成的 workflow 使用 `staged: true`：它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`。
 
-Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `agent:needs-human` 五个机器路由标签。它们不是 Project 状态的第二份副本。
+Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
 
 将 `.github/workflows/*.md`、编译生成的 `*.lock.yml` 和 `.github/aw/actions-lock.json` 一起提交。`gh-aw` 升级也要通过 PR 重新编译和审查。本 profile 默认完全不提供 merge safe output；需要合并时继续使用 `合并收尾`，或在仓库规则成熟后单独配置 GitHub Auto-merge/merge queue。
 
