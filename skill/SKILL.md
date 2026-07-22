@@ -109,7 +109,7 @@ When the repository explicitly adopts GitHub Agentic Workflows:
 
 1. Run `python3 scripts/configure_agentic_workflows.py [repository]` for a read-only plan.
 2. Show the exact workflow source files, engine secret name, routing labels, schedule, cost limits, and rollout state.
-3. Start with `--apply` in staged mode. Never use `--live` in the same approval step as first installation.
+3. Start with `--apply` in staged mode. The configurator rejects a first-time `--live --apply`; later promotion is allowed only when all generated files still exactly match its staged profile.
 4. Compile with a pinned supported `gh-aw` release using `gh aw compile --strict`; commit both Markdown sources and generated lock files.
 5. Verify staged runs on representative Issue, PR, review, and CI events before proposing live safe outputs.
 6. Keep the provided integrator merge-free. Repository auto-merge remains a separate policy and GitHub rules decision.

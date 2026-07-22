@@ -19,9 +19,11 @@ on:
   workflow_run:
     workflows: [__CI_WORKFLOW__]
     types: [completed]
-    branches: [__DEFAULT_BRANCH__]
+    branches: [__CI_BRANCH_PATTERN__]
   roles: [admin, maintainer, write]
   bots: ["github-actions[bot]", "copilot[bot]"]
+
+if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
 
 permissions:
   actions: read
@@ -46,14 +48,17 @@ safe-outputs:
     max: 3
   add-comment:
     target: "*"
+    required-labels: [agent:managed]
     max: 2
   add-labels:
-    allowed: [agent:managed, agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
+    required-labels: [agent:managed]
     max: 3
   remove-labels:
     allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
+    required-labels: [agent:managed]
     max: 3
 ---
 

@@ -15,6 +15,27 @@ on:
         description: "Why implementation or rework is needed"
         required: true
         type: string
+  permissions:
+    issues: read
+    pull-requests: read
+  steps:
+    - name: Require exact managed target
+      id: managed_target
+      env:
+        ITEM_NUMBER: ${{ github.event.inputs.item_number }}
+        ITEM_KIND: ${{ github.event.inputs.item_kind }}
+      run: |
+        case "$ITEM_NUMBER" in
+          ''|*[!0-9]*) exit 1 ;;
+        esac
+        item_json="$(gh api "repos/$GITHUB_REPOSITORY/issues/$ITEM_NUMBER")"
+        if [ "$ITEM_KIND" = "pull_request" ]; then
+          printf '%s\n' "$item_json" | jq -e '.pull_request and any(.labels[]?; .name == "agent:managed")' >/dev/null
+        else
+          printf '%s\n' "$item_json" | jq -e '(.pull_request | not) and any(.labels[]?; .name == "agent:managed")' >/dev/null
+        fi
+
+if: needs.pre_activation.outputs.managed_target_result == 'success'
 
 run-name: Agent implement ${{ github.event.inputs.item_kind }} #${{ github.event.inputs.item_number }}
 
@@ -38,27 +59,54 @@ concurrency:
   group: gh-aw-agent-implement-${{ github.event.inputs.item_kind }}-${{ github.event.inputs.item_number }}
   cancel-in-progress: false
 
+jobs:
+  managed-target-gate:
+    runs-on: ubuntu-latest
+    needs: agent
+    permissions:
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Recheck managed target before writes
+        env:
+          ITEM_NUMBER: ${{ github.event.inputs.item_number }}
+          ITEM_KIND: ${{ github.event.inputs.item_kind }}
+        run: |
+          case "$ITEM_NUMBER" in
+            ''|*[!0-9]*) exit 1 ;;
+          esac
+          item_json="$(gh api "repos/$GITHUB_REPOSITORY/issues/$ITEM_NUMBER")"
+          if [ "$ITEM_KIND" = "pull_request" ]; then
+            printf '%s\n' "$item_json" | jq -e '.pull_request and any(.labels[]?; .name == "agent:managed")' >/dev/null
+          else
+            printf '%s\n' "$item_json" | jq -e '(.pull_request | not) and any(.labels[]?; .name == "agent:managed")' >/dev/null
+          fi
+
 safe-outputs:
   staged: __STAGED__
+  needs: [managed-target-gate]
   create-pull-request:
     draft: false
     labels: [agent:managed, agent:needs-review]
     max: 1
     auto-close-issue: true
   push-to-pull-request-branch:
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
     required-labels: [agent:managed]
     max: 1
   add-comment:
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
+    required-labels: [agent:managed]
     max: 2
   add-labels:
-    allowed: [agent:managed, agent:needs-review, needs:human]
-    target: "*"
+    allowed: [agent:needs-review, needs:human]
+    target: "${{ github.event.inputs.item_number }}"
+    required-labels: [agent:managed]
     max: 3
   remove-labels:
     allowed: [agent:needs-rework, agent:merge-ready]
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
+    required-labels: [agent:managed]
     max: 2
 ---
 

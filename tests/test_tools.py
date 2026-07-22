@@ -120,13 +120,95 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 self.assertIn("staged: true", content)
                 self.assertNotIn("__ENGINE__", content)
                 self.assertNotIn("__STAGED__", content)
-                self.assertNotIn("__DEFAULT_BRANCH__", content)
+                self.assertNotIn("__CI_BRANCH_PATTERN__", content)
                 self.assertNotIn("__CI_WORKFLOW__", content)
 
             second = run(command, root)
             self.assertEqual(second.returncode, 0, second.stderr)
             report = json.loads(second.stdout)
             self.assertTrue(all(item["action"] == "unchanged" for item in report["files"]))
+
+    def test_first_install_cannot_enable_live_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+
+            result = run([sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root)
+
+            self.assertEqual(result.returncode, 5)
+            report = json.loads(result.stdout)
+            self.assertEqual(len(report["blocked"]), 4)
+            self.assertTrue(
+                all(item["action"] == "requires_staged_install" for item in report["files"])
+            )
+            self.assertFalse((root / ".github").exists())
+
+    def test_exact_staged_install_can_be_promoted_to_live(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            staged = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+            self.assertEqual(staged.returncode, 0, staged.stderr)
+
+            preview = run([sys.executable, str(AGENTIC), str(root), "--live"], root)
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertTrue(
+                all(
+                    item["action"] == "promote_to_live"
+                    for item in json.loads(preview.stdout)["files"]
+                )
+            )
+
+            promoted = run(
+                [sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root
+            )
+            self.assertEqual(promoted.returncode, 0, promoted.stderr)
+            for workflow in (root / ".github" / "workflows").glob("agent-*.md"):
+                self.assertIn("staged: false", workflow.read_text(encoding="utf-8"))
+
+    def test_modified_staged_install_cannot_be_promoted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            self.assertEqual(
+                run([sys.executable, str(AGENTIC), str(root), "--apply"], root).returncode,
+                0,
+            )
+            workflows = root / ".github" / "workflows"
+            modified = workflows / "agent-review.md"
+            modified.write_text(
+                modified.read_text(encoding="utf-8") + "\nuser change\n", encoding="utf-8"
+            )
+
+            result = run(
+                [sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root
+            )
+
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("user change", modified.read_text(encoding="utf-8"))
+            for workflow in workflows.glob("agent-*.md"):
+                self.assertIn("staged: true", workflow.read_text(encoding="utf-8"))
+
+    def test_symlinked_workflow_directory_is_rejected_without_external_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            container = Path(directory)
+            root = container / "repository"
+            outside = container / "outside"
+            root.mkdir()
+            outside.mkdir()
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            github = root / ".github"
+            github.mkdir()
+            try:
+                os.symlink(outside, github / "workflows", target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symbolic links unavailable: {error}")
+
+            result = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+
+            self.assertEqual(result.returncode, 6)
+            self.assertEqual(json.loads(result.stdout)["reason"], "unsafe_destination")
+            self.assertEqual(list(outside.iterdir()), [])
 
     def test_conflict_refuses_all_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -390,8 +472,24 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("After three failed cycles", supervisor)
         self.assertIn("AGENT-CYCLE:", implementer)
         self.assertIn("needs:human", supervisor)
+        self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 3)
+        self.assertIn("github.event.workflow_run.event == 'pull_request'", supervisor)
+        self.assertIn("branches: [__CI_BRANCH_PATTERN__]", supervisor)
         self.assertIn("create-pull-request", implementer)
+        self.assertIn("needs.pre_activation.outputs.managed_target_result", implementer)
+        self.assertIn("needs: [managed-target-gate]", implementer)
+        self.assertIn("Recheck managed target before writes", implementer)
+        self.assertNotIn("allowed: [agent:managed", implementer)
+        self.assertEqual(
+            implementer.count('target: "${{ github.event.inputs.item_number }}"'), 4
+        )
+        self.assertEqual(implementer.count("required-labels: [agent:managed]"), 4)
         self.assertIn("submit-pull-request-review", reviewer)
+        self.assertIn("Recheck managed pull request before writes", reviewer)
+        self.assertIn("needs: [managed-target-gate]", reviewer)
+        self.assertEqual(reviewer.count("required-labels: [agent:managed]"), 4)
+        self.assertIn("needs: [managed-target-gate]", integrator)
+        self.assertEqual(integrator.count("required-labels: [agent:managed]"), 3)
         self.assertIn("Never call a merge API", integrator)
         for content in (supervisor, implementer, reviewer, integrator):
             self.assertNotIn("merge-pull-request", content)
