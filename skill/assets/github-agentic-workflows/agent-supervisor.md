@@ -81,6 +81,11 @@ Choose at most one next role for each item and dispatch no more than three total
 - `agent-integrate` for a managed PR that appears approved and green, solely to
   verify merge readiness. The integrator must not merge.
 
+Treat `Ready for review` as PR state only. Never dispatch `agent-implement` merely
+to change an Issue/Project status or another metadata field. Reconcile routine
+metadata through the authorized workflow layer; dispatch implementation only when
+code, tests, conflicts, review findings, or acceptance evidence require work.
+
 Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 `reason`. Prefer resuming active PRs before selecting new Issues. Do not dispatch
 duplicate work when a run is already active. If a PR already has current-head

@@ -17,6 +17,8 @@ Use one status field with `Backlog`, `Ready`, `In progress`, `Blocked`, `In revi
 
 A Project can contain Issues, pull requests, and draft items. `Backlog` means uncommitted candidate work; it does not mean bug, requirement, or high priority. Draft items are useful for uncertain ideas that should not yet become repository Issues.
 
+Do not duplicate pull-request stages in the Issue workflow. `Ready for review`, approval, checks, conflicts, and mergeability belong to the PR. The linked Issue remains `In progress` while the PR is draft, moves to `In review` when the PR becomes ready for formal review, and moves to `Done` after the linked delivery is merged and the Issue is closed.
+
 ## Built-in workflow checklist
 
 In the Project, open the menu and choose **Workflows**. Configure, when available:
@@ -27,6 +29,8 @@ In the Project, open the menu and choose **Workflows**. Configure, when availabl
 4. Keep the linked PR outside the Project by default. If the team intentionally tracks both Issue and PR items, add the PR at `In review` rather than `Backlog`, and configure **Pull request merged** → `Done`.
 
 GitHub plan limits and available triggers can differ. Verify the saved workflow and run one real Issue/PR through it. Transitions such as `In progress` and `In review` normally remain agent actions unless a repository-specific Action or API integration is deliberately added.
+
+Make those transitions event-driven and idempotent where practical. A `pull_request.ready_for_review` workflow or the single managed supervisor may move the linked Issue to `In review`; closing-keyword linkage plus the built-in Issue-closed workflow can move it to `Done`. Do not route a task back to its implementer solely to correct Project metadata.
 
 Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
 

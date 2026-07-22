@@ -36,6 +36,13 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 - `合并收尾` explicitly authorizes merging qualifying PRs for that turn only; it never authorizes deployment or publishing.
 - Platform approval prompts still apply. A direct user request can grant narrower or broader authorization for that request.
 
+## Issue and PR state semantics
+
+- `Ready for review` is a pull-request stage only; do not create or require it as an Issue or Project status.
+- Keep the linked Issue `In progress` while its PR is draft. When the PR is non-draft and ready for formal review, move the Issue to `In review` in the same handoff.
+- Let the first authorized observer or the single managed supervisor reconcile missed metadata transitions. Never send work back to the implementer solely to change status.
+- Return a PR to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria. Approval and successful CI hand it to the integration gate, subject to repository merge policy.
+
 ## Managed supervisor
 
 Bootstrap must replace every placeholder below with an approved value, or write `pending` plus the reason. `off` is the safe default.

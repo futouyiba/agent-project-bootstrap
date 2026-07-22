@@ -14,6 +14,8 @@ Avoid a second mutable task database in Markdown, JSON, or YAML. A generated rea
 
 Use: `Backlog → Ready → In progress → Blocked or In review → Done`.
 
+Keep delivery state normalized: `Ready for review` is a PR stage, not an Issue/Project status. A draft PR leaves its linked Issue `In progress`; a non-draft PR ready for formal review puts the Issue in `In review`. Approval, checks, conflicts, and mergeability remain PR facts rather than duplicated Project fields.
+
 Add only fields that drive decisions: Priority, Area, Size, and Risk. Do not duplicate Project status as labels.
 
 A Project can contain Issues, pull requests, and draft items. `Backlog` is a status or view for work not yet committed to execution; it is not a synonym for requirement, bug, or high priority. Use a draft item for an uncertain idea and an Issue for a concrete, discussable unit of work.
@@ -39,3 +41,5 @@ Ask for the linked issue, what changed and why, validation, visible evidence, ri
 Installing a GitHub connector makes tools available; it does not automatically make GitHub the task system. Repository policy must say when the agent should read or update GitHub.
 
 Use [daily project flow](daily-project-flow.md) for natural-language resolution and standing authorization, and [GitHub Project automation](github-project-automation.md) for deterministic status workflows.
+
+Assign routine metadata reconciliation to one supervisor or deterministic workflow. Any authorized observer may correct a missed transition idempotently; never require the original implementer to return solely for a status edit.

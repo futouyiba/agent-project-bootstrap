@@ -215,6 +215,8 @@ Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation 
 
 Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 Issue、判断需求是否明确、实现与总结。GitHub Project 的内置 workflow 负责确定性动作：匹配的 Issue 自动进入 Project、Issue 或 draft intake 默认进入 `Backlog`、Issue 关闭后进入 `Done`。PR 默认只作为 Issue 的关联交付记录，不作为第二个 Project 条目。
 
+这里严格区分 Issue/Project 状态与 PR 阶段：`Ready for review` 只属于 PR。PR 仍为 Draft 时，关联 Issue 保持 `In progress`；PR 转为非 Draft 并正式请求审查时，Issue 同步进入 `In review`。审批、CI、冲突和是否可合并直接读取 PR，不再复制成 Issue 状态。遗漏的纯元数据转换由 GitHub workflow 或单一托管主管纠正，不把任务退回实现者；只有代码、测试、冲突、评审问题或验收证据需要变化时才重新唤醒实现者。
+
 推荐在每个 Project 的 **Workflows** 页面配置：
 
 1. `Auto-add to project`：只筛选目标仓库的 Issues；
