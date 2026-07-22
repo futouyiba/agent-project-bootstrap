@@ -63,7 +63,7 @@ Installing this skill does not create a Project or enable workflows. During boot
 
 1. Detect the repository's existing Project and workflows.
 2. Propose the minimal statuses `Backlog`, `Ready`, `In progress`, `Blocked`, `In review`, and `Done`.
-3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them directly to `In review` and move merged PRs to `Done`.
+3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them or move them to `In review` only when they become non-draft and ready for formal review, then move merged PRs to `Done`.
 4. If the available tools cannot configure a setting, give the exact GitHub UI checklist and record it as pending rather than claiming success.
 
 After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, `managed_mode`, `github_agentic_workflows`, and `initialized_at`. This marker records configuration, not task state. Keep mutable retries, decisions, and delivery state in the linked Issue or PR.

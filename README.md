@@ -222,7 +222,7 @@ Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 I
 1. `Auto-add to project`：只筛选目标仓库的 Issues；
 2. `Item added to project`：只把 Issue/draft intake 的 Status 设为 `Backlog`；
 3. `Issue closed`：Status 设为 `Done`；
-4. 如果团队明确选择同时追踪 PR，PR 加入时直接设为 `In review`，合并后再设为 `Done`。
+4. 如果团队明确选择同时追踪 PR，只在 PR 转为非 Draft 并正式 Ready for review 时加入或设为 `In review`，合并后再设为 `Done`。
 
 GitHub 套餐、Project 类型和权限会影响可用 workflow。Bootstrap 会先检测；能通过已连接工具可靠配置时才执行，否则输出准确的网页操作清单并把状态记为 pending，不会假装已经配置好。
 
@@ -302,7 +302,7 @@ Backlog 是“尚未承诺立即执行的候选工作集合”，不是另一种
 信息补齐并排定 → Ready
 有人开始做 → In progress
 受依赖阻塞 → Blocked
-进入 PR → In review
+PR Ready for review → In review
 合并且验收完成 → Done
 ```
 

@@ -514,6 +514,33 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("`Ready for review` is a pull-request stage only", template)
         self.assertIn("Never send work back to the implementer solely", template)
 
+    def test_in_review_requires_ready_for_review_not_pr_creation(self) -> None:
+        template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
+        readme = (REPOSITORY / "README.md").read_text(encoding="utf-8")
+        skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        automation = (
+            REPOSITORY / "skill" / "references" / "github-project-automation.md"
+        ).read_text(encoding="utf-8")
+        daily_flow = (
+            REPOSITORY / "skill" / "references" / "daily-project-flow.md"
+        ).read_text(encoding="utf-8")
+        managed_supervisor = (
+            REPOSITORY / "skill" / "assets" / "codex-managed-supervisor.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("open and link a PR, move to `In review`", template)
+        self.assertIn("mark the PR ready for formal review", template)
+        self.assertNotIn("进入 PR → In review", readme)
+        self.assertIn("PR Ready for review → In review", readme)
+        self.assertNotIn("add them directly to `In review`", skill)
+        self.assertNotIn("add the PR at `In review` rather than `Backlog`", automation)
+        for content in (skill, automation):
+            self.assertIn("non-draft and ready for formal review", content)
+        self.assertIn("keep it draft and leave the Issue `In progress`", daily_flow)
+        self.assertIn("Move the linked Issue to `In review`", daily_flow)
+        self.assertIn("a draft PR keeps its linked Issue `In progress`", managed_supervisor)
+        self.assertIn("ready for formal review puts it in `In review`", managed_supervisor)
+
 
 if __name__ == "__main__":
     unittest.main()
