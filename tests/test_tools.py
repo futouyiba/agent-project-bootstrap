@@ -105,6 +105,7 @@ class PosixInstallerTests(unittest.TestCase):
             destination = codex_root / "skills" / "agent-project-bootstrap"
             self.assertTrue((destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
+            self.assertTrue((destination / "assets" / "codex-managed-supervisor.md").exists())
             integrate_prompt = codex_root / "prompts" / "integrate.md"
             self.assertTrue(integrate_prompt.exists())
             self.assertIn("Use $$agent-project-bootstrap", integrate_prompt.read_text(encoding="utf-8"))
@@ -126,6 +127,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertNotIn("OUTDATED RULE", agents)
             self.assertIn("never require the user to know an Issue number", agents)
             self.assertIn("合并收尾", agents)
+            self.assertIn("托管这个项目", agents)
+            self.assertIn("one durable supervisor", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
     def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
@@ -260,7 +263,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("bootstrap mode first", skill)
         self.assertIn("Preserve the pending task description", skill)
         self.assertIn("Never require the user to supply an Issue number", skill)
-        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾"):
+        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾", "托管这个项目"):
             self.assertIn(shortcut, skill)
 
         daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
@@ -270,6 +273,33 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Merge one PR, refresh GitHub state", daily_flow)
         self.assertIn("does not include deployment", daily_flow)
 
+    def test_managed_mode_has_bounded_supervisor_contract(self) -> None:
+        skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        managed = (REPOSITORY / "skill" / "references" / "managed-autopilot.md").read_text(
+            encoding="utf-8"
+        )
+        prompt = (REPOSITORY / "skill" / "assets" / "codex-managed-supervisor.md").read_text(
+            encoding="utf-8"
+        )
+        marker = (REPOSITORY / ".codex" / "agent-project-bootstrap.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("## Managed mode", skill)
+        self.assertIn("Do not depend on the user copying messages", skill)
+        self.assertIn("retry limit", managed)
+        self.assertIn("Default human gates", managed)
+        self.assertIn("qualified_auto_merge", managed)
+        self.assertIn("Scheduled heartbeats are not GitHub webhooks", managed)
+        self.assertIn("end this heartbeat quietly", prompt)
+        self.assertIn("Never deploy or publish", prompt)
+        self.assertIn("version: 4", marker)
+        self.assertIn("managed_mode:", marker)
+        self.assertIn("level: off", marker)
+        self.assertIn("goal_scope: null", marker)
+        self.assertIn("retry_limit: 3", marker)
+        self.assertIn("merge_policy: per_turn", marker)
+
     def test_repository_template_contains_authorization_boundary(self) -> None:
         template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
         self.assertIn("## Standing authorization", template)
@@ -277,6 +307,11 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Validation commands", template)
         self.assertIn("Ask before", template)
         self.assertIn("merging", template)
+        self.assertIn("## Managed supervisor", template)
+        self.assertIn("Heartbeat: `<schedule-or-pending>`", template)
+        self.assertIn("Retry limit: `<integer-default-3>`", template)
+        self.assertIn("Merge policy: `<per_turn|qualified_auto_merge|manual>`", template)
+        self.assertIn("Deployment and publishing", template)
 
 
 if __name__ == "__main__":

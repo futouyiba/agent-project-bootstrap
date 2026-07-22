@@ -93,8 +93,9 @@ try {
 - If neither exists, use `agent-project-bootstrap` for a read-only audit and offer a concise interactive initialization.
 - Do not create bootstrap files until the user authorizes the proposed scope.
 - Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
-- Treat `记一下`, `收需求`, `开始做`, `收尾`, and `合并收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管这个项目` as shortcuts for the `agent-project-bootstrap` flow.
 - Treat an explicit `合并收尾` request or the expanded `/prompts:integrate` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
+- When repository policy enables managed mode, use one durable supervisor to refresh GitHub on each scheduled wake-up and continue routine review/CI handoffs without asking the user to relay messages. Automatic merge still requires the repository's explicit standing policy.
 - Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
