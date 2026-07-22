@@ -8,6 +8,7 @@
 - 新项目和存量项目的交互式初始化流程；
 - 不要求记住 Issue 编号的自然语言日常工作流；
 - 一个有边界的“托管”模式，让同一个主管任务自动接续 PR、评审和 CI；
+- 一个可选的 GitHub Agentic Workflows 事件驱动层，让 GitHub 自己唤醒调度、实现、审查和合并就绪检查；
 - 全局“合并收尾”意图，以及 Codex CLI/IDE 的 `/prompts:integrate` 快捷入口；
 - Issue、PR、CI、分支保护和 worktree 隔离的实践规范；
 - macOS、Linux 和 Windows 安装器；
@@ -113,11 +114,12 @@ Codex CLI 和 IDE 扩展还可以输入：
 
 | 层级 | 作用 | 是否安装后自动完成 |
 |---|---|---|
-| Skill | 理解初始化和日常流程 | 是 |
+| Skill | 理解初始化、日常流程和可选 `gh-aw` 安装流程 | 是 |
 | 全局 Prompt | 在 CLI/IDE 提供 `/prompts:integrate` | 是，但属于 deprecated 兼容入口 |
 | 全局 `AGENTS.md` | 记住个人通用偏好：不要求 Issue 编号、识别短语、遇到歧义再问 | 仅使用 `--with-global-rule` 时 |
 | 仓库 `AGENTS.md` | 保存 Project 地址、精确状态名、测试命令和常规授权边界 | 每个仓库 bootstrap 时 |
 | GitHub Project workflows | 自动加入 Project、默认 Backlog、关闭或合并后 Done | 每个 Project 单独配置 |
+| GitHub Agentic Workflows | 事件/定时唤醒并在 agent 角色之间自动交接 | 否；每仓库显式安装，默认 staged |
 
 因此，bootstrap 完成后，Agent 才能依据仓库规则自动执行已选任务内的常规动作；它不会因为 Skill 存在就擅自合并、部署、删除或扩大需求范围。执行工具本身如果出现平台授权提示，仍需用户批准。
 
@@ -151,6 +153,57 @@ Agent 会一次性确认或记录：
 默认不托管部署、发布、删除、密钥、计费、破坏性数据迁移、需求扩张和高风险合并。这些动作只在仓库政策明确单独授权时才能执行。
 
 Codex Automation 目前主要是定时心跳，不是 GitHub webhook；本地执行时还可能依赖电脑和客户端保持可用。如果需要真正的事件驱动，可选官方 [`openai/codex-action`](https://github.com/openai/codex-action)，但它需要 API Key、GitHub Secret、权限和 prompt-injection 威胁模型，本项目默认不启用可写的事件自动化。
+
+### 可选：基于 `gh-aw` 的事件驱动托管
+
+如果目标是不再由人把“实现完成—请审查—还要修改—CI 已通过”粘贴到不同对话，可以为单个仓库启用 [GitHub Agentic Workflows (`gh-aw`)](https://github.com/github/gh-aw) profile。它在 GitHub Actions 中启动独立的无界面 agent run，不会给桌面端任务发送 Steer，也不会打断 ChatGPT/Codex 当前对话。
+
+本项目提供四个角色，但仍然只有一个调度者：
+
+```text
+GitHub 事件/30 分钟兜底心跳
+             ↓
+      agent-supervisor
+       ↙      ↓      ↘
+ 实现/返工   独立审查   合并就绪核验
+    ↓          ↓           ↓
+ Issue、PR、Review、CI（共同事实来源）
+```
+
+- `agent-supervisor`：只路由带 `agent:managed` 的事项；
+- `agent-implement`：创建 Issue 关联 PR，或在同一 PR 分支修复；
+- `agent-review`：独立审查，留下 `VERDICT: MERGE_READY` 或阻塞意见；
+- `agent-integrate`：重新核对当前 head、CI、依赖和评论，但**不执行合并**。
+
+它不是安装全局 Skill 后自动开启的。每个仓库都要先做只读计划：
+
+```sh
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex
+```
+
+确认后只安装预演版：
+
+```sh
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex --apply
+gh aw compile --strict
+```
+
+Windows PowerShell 对应使用：
+
+```powershell
+python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py" C:\path\to\repository --engine codex --apply
+gh aw compile --strict
+```
+
+模板目前使用官方 `gh-aw v0.82.14` 做过严格编译验证。首次编译会把新增的 engine secrets 和 Actions 列为 safe-update 安全审查项；逐项检查并在 PR 中记录理由后，再执行 `gh aw compile --strict --approve`。安装脚本不会替你静默批准。若仓库默认分支或 CI workflow 名称不是自动检测结果，可在生成时显式传入 `--default-branch` 和 `--ci-workflow`。
+
+第一次生成的 workflow 使用 `staged: true`：它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`。
+
+Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `agent:needs-human` 五个机器路由标签。它们不是 Project 状态的第二份副本。
+
+将 `.github/workflows/*.md`、编译生成的 `*.lock.yml` 和 `.github/aw/actions-lock.json` 一起提交。`gh-aw` 升级也要通过 PR 重新编译和审查。本 profile 默认完全不提供 merge safe output；需要合并时继续使用 `合并收尾`，或在仓库规则成熟后单独配置 GitHub Auto-merge/merge queue。
+
+如果由 Actions 默认 `GITHUB_TOKEN` 创建 PR 或评论，GitHub 为防止递归通常不会由它继续触发所有下游 workflow；因此 supervisor 还有定时兜底。想实现近实时递归链路，需要单独评审 GitHub App/PAT 的权限和成本，不能把更强 token 当默认值。
 
 可复用的主管指令位于 [`skill/assets/codex-managed-supervisor.md`](skill/assets/codex-managed-supervisor.md)，安装 Skill 时会一起安装。
 
