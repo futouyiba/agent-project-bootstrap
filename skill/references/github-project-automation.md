@@ -9,6 +9,7 @@ Installing a GitHub connector gives the agent tools. Installing this skill gives
 - The agent interprets natural language, finds or proposes the right Issue, detects ambiguity, implements work, and summarizes evidence.
 - GitHub's deterministic workflows add matching Issues to a Project, set intake status, and close predictable lifecycle transitions.
 - CI tests code. Branch rules use CI and review results as merge gates.
+- A managed supervisor interprets review and CI results and performs the next authorized semantic action. It does not replace GitHub's deterministic workflows.
 
 ## Minimal Project
 
@@ -26,6 +27,8 @@ In the Project, open the menu and choose **Workflows**. Configure, when availabl
 4. Keep the linked PR outside the Project by default. If the team intentionally tracks both Issue and PR items, add the PR at `In review` rather than `Backlog`, and configure **Pull request merged** → `Done`.
 
 GitHub plan limits and available triggers can differ. Verify the saved workflow and run one real Issue/PR through it. Transitions such as `In progress` and `In review` normally remain agent actions unless a repository-specific Action or API integration is deliberately added.
+
+Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
 
 ## Recording the result
 

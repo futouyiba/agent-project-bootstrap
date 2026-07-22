@@ -13,8 +13,14 @@ Translate ordinary descriptions into safe GitHub operations. The user should not
 | `开始做：…` | Find the best existing Issue, start it, implement it, validate it, and open a linked PR. |
 | `收尾` | Inspect the current Issue/PR, record evidence, and prepare the gated next step. |
 | `合并收尾` | Merge qualifying approved PRs in the current repository, one at a time, without deploying or publishing. |
+| `托管` | Supervise the current repository and current explicit goal, active Issue, or active PR. |
+| `托管：…` | Supervise the supplied goal or scope and escalate only at human gates. |
 
 Natural-language equivalents have the same meaning. These phrases are conveniences, not magic syntax.
+
+For bare `托管`, do not ask the user to restate context that is already clear from the current repository, conversation, active Issue, or active PR. Ask one concise scope question only when several candidates remain plausible. Combine missing cadence and merge-policy choices into the same one-time setup question.
+
+For continuous supervision, read [managed autopilot](managed-autopilot.md). Managed mode reuses this lifecycle and authorization matrix; it does not create a second workflow.
 
 ## Finding the Issue
 
