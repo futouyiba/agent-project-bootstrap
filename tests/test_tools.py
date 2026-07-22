@@ -278,6 +278,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("one durable supervisor", agents)
             self.assertIn("GitHub Agentic Workflows profile", agents)
             self.assertIn("staged on first installation", agents)
+            self.assertIn("`Ready for review` is a pull-request stage only", agents)
+            self.assertIn("Never send work back to the implementer solely", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
     def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
@@ -388,6 +390,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("## Integrate approved pull requests", daily_flow)
         self.assertIn("Merge one PR, refresh GitHub state", daily_flow)
         self.assertIn("does not include deployment", daily_flow)
+        self.assertIn("`Ready for review` is a PR stage", daily_flow)
+        self.assertIn("without handing the task back to the implementer", daily_flow)
 
     def test_managed_mode_has_bounded_supervisor_contract(self) -> None:
         skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
@@ -473,6 +477,9 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Retry limit: `<integer-default-3>`", template)
         self.assertIn("Merge policy: `<per_turn|qualified_auto_merge|manual>`", template)
         self.assertIn("Deployment and publishing", template)
+        self.assertIn("## Issue and PR state semantics", template)
+        self.assertIn("`Ready for review` is a pull-request stage only", template)
+        self.assertIn("Never send work back to the implementer solely", template)
 
 
 if __name__ == "__main__":

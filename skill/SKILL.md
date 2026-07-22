@@ -68,6 +68,13 @@ Installing this skill does not create a Project or enable workflows. During boot
 
 After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, `managed_mode`, `github_agentic_workflows`, and `initialized_at`. This marker records configuration, not task state. Keep mutable retries, decisions, and delivery state in the linked Issue or PR.
 
+### Keep Issue and PR states distinct
+
+- Treat `Ready for review` as a pull-request stage only. Do not add or require it as an Issue or Project status; use `In review` for the linked Issue.
+- Keep the Issue `In progress` while its PR is a draft. When the PR becomes non-draft and ready for formal review, move the linked Issue to `In review` in the same handoff.
+- Drive routine state transitions from observable GitHub events. The first authorized agent or the repository's single supervisor that observes a missed transition should reconcile it idempotently; never send work back to the implementer solely to edit metadata.
+- Once current-head review and CI gates pass, hand the PR to the integrator or configured auto-merge policy. Return it to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria.
+
 ## Daily-flow mode
 
 Read [daily project flow](references/daily-project-flow.md) and follow the repository's `AGENTS.md`.
@@ -98,6 +105,7 @@ Read [managed autopilot](references/managed-autopilot.md) completely before enab
 - Use one durable supervisor task per repository or explicitly bounded goal. Do not create separate human-relayed implementation, review, and merge chats.
 - On each wake-up, refresh GitHub and continue the selected goal through routine implementation, review feedback, CI repair, and re-review cycles.
 - Treat GitHub as the mailbox and source of truth. Do not depend on the user copying messages between agents.
+- Reconcile Issue, Project, and PR state from current GitHub evidence. Do not dispatch an implementer merely to mark a PR ready, move an Issue to `In review`, or perform another metadata-only handoff when the supervisor is authorized to do it.
 - Use a recurring Codex Automation as a heartbeat when available. Do not claim it is an event webhook or that it runs while the required local client is offline.
 - Prefer GitHub built-in workflows, required checks, automatic Codex review, and repository auto-merge for deterministic transitions. Use GitHub Agentic Workflows only as an explicit opt-in event-driven execution layer because it requires an engine credential, Actions minutes/cost, generated lock files, and a deliberate threat model.
 - Stop and ask at the repository's human gates or after the configured retry limit. Record the blocker on the Issue or PR before escalating once.
@@ -122,7 +130,7 @@ Once a task is clearly selected and repository policy adopts this workflow, the 
 - move the selected item from `Ready` to `In progress`;
 - create its task branch;
 - create and link a PR;
-- move it to `In review`;
+- mark the PR ready for formal review and move the linked Issue to `In review` when implementation evidence is complete;
 - record validation results.
 
 Ask before:

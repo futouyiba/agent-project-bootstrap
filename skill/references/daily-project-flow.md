@@ -37,11 +37,12 @@ Do not ask the user to search GitHub or memorize a number when the agent can res
 1. Read the Issue, acceptance criteria, dependencies, and current Project state.
 2. Check whether a dependency or conflicting active branch blocks work.
 3. Move `Ready` to `In progress` and create a dedicated branch.
-4. Implement only the agreed scope and run repository validation.
-5. Open a PR that links the Issue and reports exact evidence.
-6. Move the item to `In review`.
-7. Let CI and review provide merge-readiness evidence.
-8. Ask before merge or deployment unless the current request expressly authorized it.
+4. Implement only the agreed scope and run repository validation. If an early PR is useful, keep it draft and leave the Issue `In progress`.
+5. Link the PR to the Issue, report exact evidence, and mark the PR ready for formal review only when implementation is complete enough to request a decision.
+6. Move the linked Issue to `In review` in the same handoff. `Ready for review` is a PR stage, never an Issue or Project status.
+7. Let current-head CI and review provide merge-readiness evidence. An authorized observer or the single supervisor should repair a missed metadata transition without handing the task back to the implementer.
+8. Return to implementation only for code, tests, conflicts, unresolved findings, or unmet acceptance criteria. Otherwise proceed to the integration gate.
+9. Ask before merge or deployment unless the current request expressly authorized it.
 
 ## Authorization matrix
 
@@ -51,7 +52,7 @@ Do not ask the user to search GitHub or memorize a number when the agent can res
 | Change Ready to In progress | Automatic | Ask |
 | Create task branch | Automatic | Ask |
 | Open linked PR | Automatic | Ask |
-| Record tests and move to In review | Automatic | Ask |
+| Mark PR ready, record tests, and move linked Issue to In review | Automatic | Ask |
 | Create a clearly requested Issue | Allowed when repository policy says so | Ask once |
 | Change scope or acceptance criteria | Ask | Ask |
 | Close as Not planned, delete, publish, deploy | Ask | Ask |

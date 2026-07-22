@@ -44,11 +44,12 @@ On every scheduled wake-up:
 1. Read repository policy and refresh current GitHub state.
 2. Restrict work to the configured goal, Issues, and dependency order.
 3. Resume an active PR before selecting new `Ready` work.
-4. If actionable review feedback exists, address it on the same branch, validate, push, reply with evidence, and re-request review when supported.
-5. If required CI fails, diagnose and repair it within scope. Count a cycle only after a new attempted fix receives a new review or CI result.
-6. If the PR qualifies and merge policy is `qualified_auto_merge`, enable auto-merge or enter the merge queue. Refresh after merge before selecting dependent work.
-7. If no action is available, finish the heartbeat quietly; do not ask the user to relay status.
-8. If a human gate is reached or the retry limit is exhausted, record one concise blocker on the Issue or PR and notify the user once with the decision needed.
+4. Reconcile artifact state before dispatching code work: leave draft PR work `In progress`; when a PR becomes ready for formal review, move its linked Issue to `In review`; never dispatch the implementer only to edit status metadata.
+5. If actionable review feedback exists, address it on the same branch, validate, push, reply with evidence, and re-request review when supported.
+6. If required CI fails, diagnose and repair it within scope. Count a cycle only after a new attempted fix receives a new review or CI result.
+7. If the PR qualifies and merge policy is `qualified_auto_merge`, enable auto-merge or enter the merge queue. Refresh after merge before selecting dependent work.
+8. If no action is available, finish the heartbeat quietly; do not ask the user to relay status.
+9. If a human gate is reached or the retry limit is exhausted, record one concise blocker on the Issue or PR and notify the user once with the decision needed.
 
 Do not infer success from old comments or stale checks. Do not resolve substantive review threads merely because code changed; verify the concern and follow repository review policy.
 
