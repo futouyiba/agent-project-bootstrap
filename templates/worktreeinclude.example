@@ -1,0 +1,6 @@
+# Include only ignored local files genuinely required by new Codex worktrees.
+# Examples to review; do not copy blindly:
+# .env.local
+# config/local.yml
+# compose.override.yml
+

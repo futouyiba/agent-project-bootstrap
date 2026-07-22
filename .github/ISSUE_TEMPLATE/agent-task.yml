@@ -1,0 +1,57 @@
+name: Agent task
+description: A scoped task ready for a human or coding agent
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: "Describe the result, not only the activity."
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What observable result should exist when this is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Relevant links, constraints, decisions, and background.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: State what is in scope and explicitly out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Use testable statements.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Commands, scenarios, screenshots, or other evidence expected.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Link blocked-by issues, sub-issues, or external dependencies.
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and rollback
+      description: Migration, security, data, compatibility, or rollback concerns.
+

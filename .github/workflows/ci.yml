@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Test POSIX installer
+        if: runner.os != 'Windows'
+        shell: sh
+        run: |
+          sh ./install.sh --source . --codex-home "$RUNNER_TEMP/codex-home" --with-global-rule
+          test -f "$RUNNER_TEMP/codex-home/skills/agent-project-bootstrap/SKILL.md"
+      - name: Test PowerShell installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install.ps1 -Source . -CodexHome "$env:RUNNER_TEMP/codex-home" -WithGlobalRule
+          if (-not (Test-Path "$env:RUNNER_TEMP/codex-home/skills/agent-project-bootstrap/SKILL.md")) { exit 1 }
+

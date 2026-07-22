@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agent 项目初始化"
+  short_description: "为新旧仓库配置 GitHub 协作、CI 与 worktree 隔离"
+  default_prompt: "Use $agent-project-bootstrap to audit and interactively initialize or migrate this repository for coordinated agent development."
+
