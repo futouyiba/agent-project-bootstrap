@@ -27,7 +27,7 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 
 - The user does not need to know an Issue number. Search the fresh local snapshot and GitHub from their description.
 - For one clear match, select it and report its number. For several plausible matches, show the best two or three and ask one question.
-- Treat `记一下`, `收需求`, `开始做`, `收尾`, and `合并收尾` as workflow shortcuts described by `agent-project-bootstrap`.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管这个项目` as workflow shortcuts described by `agent-project-bootstrap`.
 
 ## Standing authorization
 
@@ -35,6 +35,24 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 - Ask before creating work not clearly implied by the conversation, changing scope or acceptance criteria, closing as `Not planned`, deleting records, merging, publishing, or deploying.
 - `合并收尾` explicitly authorizes merging qualifying PRs for that turn only; it never authorizes deployment or publishing.
 - Platform approval prompts still apply. A direct user request can grant narrower or broader authorization for that request.
+
+## Managed supervisor
+
+Bootstrap must replace every placeholder below with an approved value, or write `pending` plus the reason. `off` is the safe default.
+
+- Managed mode: `<off|supervised|autonomous>`
+- Goal or Issue scope: `<scope-or-pending>`
+- Supervisor: `<thread-automation-or-pending>`
+- Heartbeat: `<schedule-or-pending>`
+- Retry limit: `<integer-default-3>`
+- Automatic review: `<configured-or-pending>`
+- Merge policy: `<per_turn|qualified_auto_merge|manual>`
+- Low-risk merge criteria: `<criteria-or-none>`
+- High-risk paths or labels: `<paths-labels-or-none>`
+- Human gates: `<repository-specific-gates-plus-skill-defaults>`
+- Deployment and publishing: `<never-unless-explicitly-authorized>`
+
+When managed mode is enabled, use one durable supervisor for this repository scope. On each heartbeat, refresh GitHub, resume active PRs before new work, address review and CI feedback, and notify the user only at a recorded human gate or after the retry limit. Do not require the user to relay messages between agent conversations.
 
 ## Delivery
 

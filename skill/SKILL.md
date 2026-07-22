@@ -1,6 +1,6 @@
 ---
 name: agent-project-bootstrap
-description: Initialize or migrate a Git repository for coordinated agent development, and operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow from natural-language requests. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, 收尾, or 合并收尾.
+description: Initialize or migrate a Git repository for coordinated agent development, operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow, and configure a bounded managed supervisor that continues routine handoffs without user relaying. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, 收尾, 合并收尾, or 托管这个项目.
 ---
 
 # Agent Project Workflow
@@ -11,6 +11,7 @@ Keep durable policy in the repository, mutable work in GitHub, implementation in
 
 - Use **bootstrap mode first** whenever the repository has not adopted this workflow or the marker is absent, even when the same request contains a daily-flow shortcut. Preserve the pending task description; after authorized bootstrap completes, resolve it again and continue in daily-flow mode without making the user repeat it.
 - Use **daily-flow mode** only after the repository is configured, or when an equivalent existing coordination policy is verified. If the user explicitly declines bootstrap, do not infer standing authorization from this skill.
+- Use **managed mode** only when repository policy records its supervisor, heartbeat, retry limit, review setup, merge policy, and human gates. Managed mode extends daily flow; it does not grant unlimited authority.
 - Installation makes this skill available; it does not configure a repository or a GitHub Project. Bootstrap each repository once.
 
 ## Bootstrap mode
@@ -45,7 +46,7 @@ For an established repository, read [adopting an existing project](references/ad
 
 ### Apply repository policy
 
-Read [GitHub coordination](references/github-coordination.md), [daily project flow](references/daily-project-flow.md), and [GitHub Project automation](references/github-project-automation.md). Read [CI and branch protection](references/ci-and-protection.md) before adding CI. Read [worktree environment](references/worktree-environment.md) only for the Worktree profile.
+Read [GitHub coordination](references/github-coordination.md), [daily project flow](references/daily-project-flow.md), and [GitHub Project automation](references/github-project-automation.md). Read [managed autopilot](references/managed-autopilot.md) when the user requests continuous supervision. Read [CI and branch protection](references/ci-and-protection.md) before adding CI. Read [worktree environment](references/worktree-environment.md) only for the Worktree profile.
 
 - Merge stable, repository-specific operating rules into root `AGENTS.md`; do not overwrite it.
 - Put changing task state, ownership, dependencies, and acceptance criteria in GitHub, not a shared JSON or Markdown task table.
@@ -65,7 +66,7 @@ Installing this skill does not create a Project or enable workflows. During boot
 3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them directly to `In review` and move merged PRs to `Done`.
 4. If the available tools cannot configure a setting, give the exact GitHub UI checklist and record it as pending rather than claiming success.
 
-After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, and `initialized_at`. This marker records configuration, not task state.
+After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, `managed_mode`, and `initialized_at`. This marker records configuration, not task state. Keep mutable retries, decisions, and delivery state in the linked Issue or PR.
 
 ## Daily-flow mode
 
@@ -88,6 +89,19 @@ Never require the user to supply an Issue number.
 - **开始做 + natural-language description** — resolve the matching Issue, move it to `In progress`, create a branch, implement, validate, and open a linked PR when authorized.
 - **收尾** — inspect the linked Issue, PR, review, and CI; record evidence and move to the appropriate status, but ask before merge, deployment, deletion, or other gated actions.
 - **合并收尾 + optional scope** — treat the user's invocation as merge authorization for this turn only. Read the integration procedure in [daily project flow](references/daily-project-flow.md), merge only qualifying PRs in the current repository, and never deploy or publish.
+- **托管这个项目 + goal or scope** — configure or resume the bounded supervisor in [managed autopilot](references/managed-autopilot.md). Ask once for any missing standing merge policy or automation schedule, then stop requiring the user to relay routine Issue, PR, review, and CI updates.
+
+## Managed mode
+
+Read [managed autopilot](references/managed-autopilot.md) completely before enabling or operating managed mode.
+
+- Use one durable supervisor task per repository or explicitly bounded goal. Do not create separate human-relayed implementation, review, and merge chats.
+- On each wake-up, refresh GitHub and continue the selected goal through routine implementation, review feedback, CI repair, and re-review cycles.
+- Treat GitHub as the mailbox and source of truth. Do not depend on the user copying messages between agents.
+- Use a recurring Codex Automation as a heartbeat when available. Do not claim it is an event webhook or that it runs while the required local client is offline.
+- Prefer GitHub built-in workflows, required checks, automatic Codex review, and repository auto-merge for deterministic transitions. Keep `openai/codex-action` opt-in because it requires secrets and a deliberate threat model.
+- Stop and ask at the repository's human gates or after the configured retry limit. Record the blocker on the Issue or PR before escalating once.
+- Never let managed mode authorize deployment, publishing, deletion, destructive data changes, secret or billing changes, scope expansion, or high-risk merges unless repository policy explicitly grants that exact action.
 
 ### Apply standing authorization
 

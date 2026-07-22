@@ -13,8 +13,11 @@ Translate ordinary descriptions into safe GitHub operations. The user should not
 | `开始做：…` | Find the best existing Issue, start it, implement it, validate it, and open a linked PR. |
 | `收尾` | Inspect the current Issue/PR, record evidence, and prepare the gated next step. |
 | `合并收尾` | Merge qualifying approved PRs in the current repository, one at a time, without deploying or publishing. |
+| `托管这个项目：…` | Configure or resume one bounded supervisor that keeps reading GitHub and escalates only at human gates. |
 
 Natural-language equivalents have the same meaning. These phrases are conveniences, not magic syntax.
+
+For continuous supervision, read [managed autopilot](managed-autopilot.md). Managed mode reuses this lifecycle and authorization matrix; it does not create a second workflow.
 
 ## Finding the Issue
 
