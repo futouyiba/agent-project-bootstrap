@@ -16,6 +16,8 @@ Use: `Backlog → Ready → In progress → Blocked or In review → Done`.
 
 Add only fields that drive decisions: Priority, Area, Size, and Risk. Do not duplicate Project status as labels.
 
+A Project can contain Issues, pull requests, and draft items. `Backlog` is a status or view for work not yet committed to execution; it is not a synonym for requirement, bug, or high priority. Use a draft item for an uncertain idea and an Issue for a concrete, discussable unit of work.
+
 ## Agent task issue contract
 
 Every implementation-ready issue should state:
@@ -36,3 +38,4 @@ Ask for the linked issue, what changed and why, validation, visible evidence, ri
 
 Installing a GitHub connector makes tools available; it does not automatically make GitHub the task system. Repository policy must say when the agent should read or update GitHub.
 
+Use [daily project flow](daily-project-flow.md) for natural-language resolution and standing authorization, and [GitHub Project automation](github-project-automation.md) for deterministic status workflows.

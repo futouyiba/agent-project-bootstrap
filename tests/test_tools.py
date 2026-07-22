@@ -88,6 +88,9 @@ class PosixInstallerTests(unittest.TestCase):
     def test_local_install_and_global_rule_are_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             codex_root = Path(directory) / "codex"
+            prompts_root = codex_root / "prompts"
+            prompts_root.mkdir(parents=True)
+            (prompts_root / "integrate.md").write_text("user-owned prompt\n", encoding="utf-8")
             command = [
                 "sh",
                 str(REPOSITORY / "install.sh"),
@@ -102,11 +105,178 @@ class PosixInstallerTests(unittest.TestCase):
             destination = codex_root / "skills" / "agent-project-bootstrap"
             self.assertTrue((destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
+            integrate_prompt = codex_root / "prompts" / "integrate.md"
+            self.assertTrue(integrate_prompt.exists())
+            self.assertIn("Use $$agent-project-bootstrap", integrate_prompt.read_text(encoding="utf-8"))
+            prompt_backups = list((codex_root / "prompts").glob("integrate.md.backup.*"))
+            self.assertEqual(len(prompt_backups), 1)
+            self.assertEqual(prompt_backups[0].read_text(encoding="utf-8"), "user-owned prompt\n")
+
+            agents_file = codex_root / "AGENTS.md"
+            old_rule = agents_file.read_text(encoding="utf-8").replace(
+                "Accept natural-language task descriptions and never require the user to know an Issue number.",
+                "OUTDATED RULE",
+            )
+            agents_file.write_text(old_rule, encoding="utf-8")
 
             second = run(command, REPOSITORY)
             self.assertEqual(second.returncode, 0, second.stderr)
-            agents = (codex_root / "AGENTS.md").read_text(encoding="utf-8")
+            agents = agents_file.read_text(encoding="utf-8")
             self.assertEqual(agents.count("<!-- agent-project-bootstrap:start -->"), 1)
+            self.assertNotIn("OUTDATED RULE", agents)
+            self.assertIn("never require the user to know an Issue number", agents)
+            self.assertIn("合并收尾", agents)
+            self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
+
+    def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            codex_root = Path(directory) / "codex"
+            codex_root.mkdir(parents=True)
+            agents_file = codex_root / "AGENTS.md"
+            original = "before\n<!-- agent-project-bootstrap:start -->\nstale rule\nafter\n"
+            agents_file.write_text(original, encoding="utf-8")
+
+            result = run(
+                [
+                    "sh",
+                    str(REPOSITORY / "install.sh"),
+                    "--source",
+                    str(REPOSITORY),
+                    "--codex-home",
+                    str(codex_root),
+                    "--with-global-rule",
+                ],
+                REPOSITORY,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("markers are incomplete or duplicated", result.stderr)
+            self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
+    def test_out_of_order_global_rule_fails_without_losing_user_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            codex_root = Path(directory) / "codex"
+            codex_root.mkdir(parents=True)
+            agents_file = codex_root / "AGENTS.md"
+            original = (
+                "before\n<!-- agent-project-bootstrap:end -->\nstale rule\n"
+                "<!-- agent-project-bootstrap:start -->\nafter\n"
+            )
+            agents_file.write_text(original, encoding="utf-8")
+
+            result = run(
+                [
+                    "sh",
+                    str(REPOSITORY / "install.sh"),
+                    "--source",
+                    str(REPOSITORY),
+                    "--codex-home",
+                    str(codex_root),
+                    "--with-global-rule",
+                ],
+                REPOSITORY,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("markers are out of order", result.stderr)
+            self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
+    def test_same_line_duplicate_markers_fail_without_losing_user_content(self) -> None:
+        marker_pairs = (
+            (
+                "<!-- agent-project-bootstrap:start -->" * 2,
+                "<!-- agent-project-bootstrap:end -->",
+            ),
+            (
+                "<!-- agent-project-bootstrap:start -->",
+                "<!-- agent-project-bootstrap:end -->" * 2,
+            ),
+        )
+        for start_markers, end_markers in marker_pairs:
+            with self.subTest(start_markers=start_markers, end_markers=end_markers):
+                with tempfile.TemporaryDirectory() as directory:
+                    codex_root = Path(directory) / "codex"
+                    codex_root.mkdir(parents=True)
+                    agents_file = codex_root / "AGENTS.md"
+                    original = f"before\n{start_markers}\nstale rule\n{end_markers}\nafter\n"
+                    agents_file.write_text(original, encoding="utf-8")
+
+                    result = run(
+                        [
+                            "sh",
+                            str(REPOSITORY / "install.sh"),
+                            "--source",
+                            str(REPOSITORY),
+                            "--codex-home",
+                            str(codex_root),
+                            "--with-global-rule",
+                        ],
+                        REPOSITORY,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("markers are incomplete or duplicated", result.stderr)
+                    self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
+    def test_markers_sharing_lines_with_user_text_fail_without_losing_content(self) -> None:
+        start = "<!-- agent-project-bootstrap:start -->"
+        end = "<!-- agent-project-bootstrap:end -->"
+        originals = (
+            f"before {start}\nold rule\n{end}\nafter\n",
+            f"before\n{start}\nold rule\n{end} after\n",
+            f"before {start}\nold rule\n{end} after\n",
+        )
+        for original in originals:
+            with self.subTest(original=original):
+                with tempfile.TemporaryDirectory() as directory:
+                    codex_root = Path(directory) / "codex"
+                    codex_root.mkdir(parents=True)
+                    agents_file = codex_root / "AGENTS.md"
+                    agents_file.write_text(original, encoding="utf-8")
+
+                    result = run(
+                        [
+                            "sh",
+                            str(REPOSITORY / "install.sh"),
+                            "--source",
+                            str(REPOSITORY),
+                            "--codex-home",
+                            str(codex_root),
+                            "--with-global-rule",
+                        ],
+                        REPOSITORY,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("markers must be on their own lines", result.stderr)
+                    self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
+
+class SkillContractTests(unittest.TestCase):
+    def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
+        skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Bootstrap mode", skill)
+        self.assertIn("## Daily-flow mode", skill)
+        self.assertIn("bootstrap mode first", skill)
+        self.assertIn("Preserve the pending task description", skill)
+        self.assertIn("Never require the user to supply an Issue number", skill)
+        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾"):
+            self.assertIn(shortcut, skill)
+
+        daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Integrate approved pull requests", daily_flow)
+        self.assertIn("Merge one PR, refresh GitHub state", daily_flow)
+        self.assertIn("does not include deployment", daily_flow)
+
+    def test_repository_template_contains_authorization_boundary(self) -> None:
+        template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
+        self.assertIn("## Standing authorization", template)
+        self.assertIn("Project URL: `<project-url-or-pending>`", template)
+        self.assertIn("Validation commands", template)
+        self.assertIn("Ask before", template)
+        self.assertIn("merging", template)
 
 
 if __name__ == "__main__":

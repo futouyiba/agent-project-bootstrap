@@ -33,9 +33,60 @@ jobs:
         run: |
           sh ./install.sh --source . --codex-home "$RUNNER_TEMP/codex-home" --with-global-rule
           test -f "$RUNNER_TEMP/codex-home/skills/agent-project-bootstrap/SKILL.md"
+          test -f "$RUNNER_TEMP/codex-home/prompts/integrate.md"
       - name: Test PowerShell installer
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/codex-home" | Out-Null
+          @"
+          before
+          <!-- agent-project-bootstrap:start -->
+          old rule
+          <!-- agent-project-bootstrap:end -->
+          after
+          "@ | Set-Content "$env:RUNNER_TEMP/codex-home/AGENTS.md"
+          ./install.ps1 -Source . -CodexHome "$env:RUNNER_TEMP/codex-home" -WithGlobalRule
           ./install.ps1 -Source . -CodexHome "$env:RUNNER_TEMP/codex-home" -WithGlobalRule
           if (-not (Test-Path "$env:RUNNER_TEMP/codex-home/skills/agent-project-bootstrap/SKILL.md")) { exit 1 }
+          if (-not (Test-Path "$env:RUNNER_TEMP/codex-home/prompts/integrate.md")) { exit 1 }
+          $agents = Get-Content -Raw "$env:RUNNER_TEMP/codex-home/AGENTS.md"
+          if (-not $agents.Contains("before") -or -not $agents.Contains("after")) { exit 1 }
+          if ($agents.Contains("beforeafter") -or $agents -notmatch 'before(\r?\n)+after') { exit 1 }
+          if ([regex]::Matches($agents, '<!-- agent-project-bootstrap:start -->').Count -ne 1) { exit 1 }
+
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/broken-home" | Out-Null
+          $brokenPath = "$env:RUNNER_TEMP/broken-home/AGENTS.md"
+          $brokenOriginal = "before`n<!-- agent-project-bootstrap:start -->`nstale rule`nafter`n"
+          Set-Content -Path $brokenPath -Value $brokenOriginal -NoNewline
+          try {
+            ./install.ps1 -Source . -CodexHome "$env:RUNNER_TEMP/broken-home" -WithGlobalRule
+            exit 1
+          } catch {
+            if ((Get-Content -Raw $brokenPath) -ne $brokenOriginal) { exit 1 }
+          }
+
+          $startMarker = '<!-- agent-project-bootstrap:start -->'
+          $endMarker = '<!-- agent-project-bootstrap:end -->'
+          $inlineCases = @(
+            "before $startMarker`nold rule`n$endMarker`nafter`n",
+            "before`n$startMarker`nold rule`n$endMarker after`n",
+            "before $startMarker`nold rule`n$endMarker after`n"
+          )
+          for ($index = 0; $index -lt $inlineCases.Count; $index++) {
+            $inlineHome = "$env:RUNNER_TEMP/inline-home-$index"
+            New-Item -ItemType Directory -Force -Path $inlineHome | Out-Null
+            $inlinePath = Join-Path $inlineHome "AGENTS.md"
+            $inlineOriginal = $inlineCases[$index]
+            Set-Content -Path $inlinePath -Value $inlineOriginal -NoNewline
+            $installerFailed = $false
+            try {
+              ./install.ps1 -Source . -CodexHome $inlineHome -WithGlobalRule
+            } catch {
+              $installerFailed = $true
+            }
+            if (-not $installerFailed) { throw "Expected inline marker case $index to fail" }
+            if ((Get-Content -Raw $inlinePath) -ne $inlineOriginal) {
+              throw "Inline marker case $index modified AGENTS.md"
+            }
+          }
