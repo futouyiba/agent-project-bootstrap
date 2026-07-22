@@ -103,6 +103,13 @@ if [ "$with_global_rule" -eq 1 ]; then
   start_count="$(grep -c '<!-- agent-project-bootstrap:start -->' "$agents_file" || true)"
   end_count="$(grep -c '<!-- agent-project-bootstrap:end -->' "$agents_file" || true)"
   if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
+    start_line="$(grep -n '<!-- agent-project-bootstrap:start -->' "$agents_file" | cut -d: -f1)"
+    end_line="$(grep -n '<!-- agent-project-bootstrap:end -->' "$agents_file" | cut -d: -f1)"
+    if [ "$start_line" -ge "$end_line" ]; then
+      rm -f "$agents_temp"
+      printf 'Refusing to update %s: managed block markers are out of order.\n' "$agents_file" >&2
+      exit 1
+    fi
     sed '/<!-- agent-project-bootstrap:start -->/,/<!-- agent-project-bootstrap:end -->/d' "$agents_file" >"$agents_temp"
   elif [ "$start_count" -eq 0 ] && [ "$end_count" -eq 0 ]; then
     cp "$agents_file" "$agents_temp"

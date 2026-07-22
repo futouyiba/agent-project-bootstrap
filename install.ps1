@@ -104,7 +104,7 @@ try {
         $StartCount = [regex]::Matches($Existing, [regex]::Escape($StartMarker)).Count
         $EndCount = [regex]::Matches($Existing, [regex]::Escape($EndMarker)).Count
         if ($StartCount -eq 1 -and $EndCount -eq 1 -and $Existing.IndexOf($StartMarker) -lt $Existing.IndexOf($EndMarker)) {
-            $Pattern = '(?s)\s*<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->\s*'
+            $Pattern = '(?s)<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->'
             $WithoutOldRule = [regex]::Replace($Existing, $Pattern, "").TrimEnd()
         } elseif ($StartCount -eq 0 -and $EndCount -eq 0) {
             $WithoutOldRule = $Existing.TrimEnd()
