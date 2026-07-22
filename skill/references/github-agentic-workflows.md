@@ -79,12 +79,19 @@ Run representative staged trials for:
 Staged mode records proposed safe outputs in the Actions summary without applying
 them. Inspect routing accuracy, cost, permissions, and failure behavior. Enabling
 live safe outputs is a separate repository change and requires a new explicit
-approval. Re-render with `--live` only after the staged trial is accepted, then
-recompile and review the generated diff.
+approval. A first-time `--live --apply` is rejected. Re-render with `--live` only
+after the staged trial is accepted; promotion succeeds only when all four files
+still exactly match the generated staged profile. Recompile and review the
+generated diff.
 
 ## Security and operational rules
 
 - Keep workflow `permissions` read-only; all writes must use typed safe outputs.
+- Require `agent:managed` in deterministic pre-activation and pre-write checks.
+  Make the consolidated safe-output job depend on the second check. Restrict
+  worker mutations to their exact input item and use handler-level label filters
+  wherever the pinned compiler preserves them.
+- Reject symbolic links in the workflow destination before planning or writing.
 - Keep generated lock files committed and Actions pinned by the compiler.
 - Limit dispatch fan-out, AI credits, timeouts, per-item concurrency, and retry
   cycles. The bundled profile records `AGENT-CYCLE:` evidence on the PR and

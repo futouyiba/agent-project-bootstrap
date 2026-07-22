@@ -15,6 +15,22 @@ on:
         description: "Why review is needed"
         required: true
         type: string
+  permissions:
+    issues: read
+    pull-requests: read
+  steps:
+    - name: Require exact managed pull request
+      id: managed_target
+      env:
+        ITEM_NUMBER: ${{ github.event.inputs.item_number }}
+      run: |
+        case "$ITEM_NUMBER" in
+          ''|*[!0-9]*) exit 1 ;;
+        esac
+        gh api "repos/$GITHUB_REPOSITORY/issues/$ITEM_NUMBER" \
+          --jq '.pull_request and any(.labels[]?; .name == "agent:managed")' | grep -qx true
+
+if: needs.pre_activation.outputs.managed_target_result == 'success'
 
 run-name: Agent review PR #${{ github.event.inputs.item_number }}
 
@@ -38,25 +54,46 @@ concurrency:
   group: gh-aw-agent-review-${{ github.event.inputs.item_number }}
   cancel-in-progress: true
 
+jobs:
+  managed-target-gate:
+    runs-on: ubuntu-latest
+    needs: agent
+    permissions:
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Recheck managed pull request before writes
+        env:
+          ITEM_NUMBER: ${{ github.event.inputs.item_number }}
+        run: |
+          case "$ITEM_NUMBER" in
+            ''|*[!0-9]*) exit 1 ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ITEM_NUMBER" \
+            --jq '.pull_request and any(.labels[]?; .name == "agent:managed")' | grep -qx true
+
 safe-outputs:
   staged: __STAGED__
+  needs: [managed-target-gate]
   create-pull-request-review-comment:
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
     required-labels: [agent:managed]
     max: 20
   submit-pull-request-review:
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
     required-labels: [agent:managed]
     allowed-events: [COMMENT, REQUEST_CHANGES]
     supersede-older-reviews: true
     max: 1
   add-labels:
     allowed: [agent:needs-rework, agent:merge-ready, needs:human]
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
+    required-labels: [agent:managed]
     max: 2
   remove-labels:
     allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready]
-    target: "*"
+    target: "${{ github.event.inputs.item_number }}"
+    required-labels: [agent:managed]
     max: 3
 ---
 

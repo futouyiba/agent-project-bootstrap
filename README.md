@@ -195,11 +195,15 @@ python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_wo
 gh aw compile --strict
 ```
 
-模板目前使用官方 `gh-aw v0.82.14` 做过严格编译验证。首次编译会把新增的 engine secrets 和 Actions 列为 safe-update 安全审查项；逐项检查并在 PR 中记录理由后，再执行 `gh aw compile --strict --approve`。安装脚本不会替你静默批准。若仓库默认分支或 CI workflow 名称不是自动检测结果，可在生成时显式传入 `--default-branch` 和 `--ci-workflow`。
+模板目前使用官方 `gh-aw v0.82.14` 做过严格编译验证。首次编译会把新增的 engine secrets 和 Actions 列为 safe-update 安全审查项；逐项检查并在 PR 中记录理由后，再执行 `gh aw compile --strict --approve`。安装脚本不会替你静默批准。CI 完成事件默认匹配所有 PR head 分支，但只接受由 `pull_request` 触发的目标 CI；可以用 `--ci-branch-pattern` 收紧分支 glob，用 `--ci-workflow` 指定准确的 workflow 名称。
 
-第一次生成的 workflow 使用 `staged: true`：它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`。
+第一次生成的 workflow 强制使用 `staged: true`：即使同时传入 `--live --apply`，工具也会拒绝首次安装。它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`；只有四个现有文件与工具生成的 staged 版本逐字一致时，升级才会受控执行，任何人工修改都会作为冲突保留。
+
+安装器还会拒绝 `.github`、`.github/workflows` 或目标 workflow 文件中的符号链接，防止仓库内路径把写入重定向到仓库外部。
 
 Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
+
+Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation job 查询精确的 Issue/PR 编号、类型和 `agent:managed` 标签；AI 结束后、任何 safe output 写入前还会再次检查。所有 worker 写入固定到传入编号，支持标签门禁的 handler 同时配置 `required-labels: [agent:managed]`。因此仓库正文或评论中的 prompt injection 不能自行把未托管事项加入执行范围。
 
 将 `.github/workflows/*.md`、编译生成的 `*.lock.yml` 和 `.github/aw/actions-lock.json` 一起提交。`gh-aw` 升级也要通过 PR 重新编译和审查。本 profile 默认完全不提供 merge safe output；需要合并时继续使用 `合并收尾`，或在仓库规则成熟后单独配置 GitHub Auto-merge/merge queue。
 
