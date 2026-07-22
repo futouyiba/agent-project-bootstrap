@@ -103,10 +103,35 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertTrue((destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
 
+            agents_file = codex_root / "AGENTS.md"
+            old_rule = agents_file.read_text(encoding="utf-8").replace(
+                "Accept natural-language task descriptions and never require the user to know an Issue number.",
+                "OUTDATED RULE",
+            )
+            agents_file.write_text(old_rule, encoding="utf-8")
+
             second = run(command, REPOSITORY)
             self.assertEqual(second.returncode, 0, second.stderr)
-            agents = (codex_root / "AGENTS.md").read_text(encoding="utf-8")
+            agents = agents_file.read_text(encoding="utf-8")
             self.assertEqual(agents.count("<!-- agent-project-bootstrap:start -->"), 1)
+            self.assertNotIn("OUTDATED RULE", agents)
+            self.assertIn("never require the user to know an Issue number", agents)
+
+
+class SkillContractTests(unittest.TestCase):
+    def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
+        skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Bootstrap mode", skill)
+        self.assertIn("## Daily-flow mode", skill)
+        self.assertIn("Never require the user to supply an Issue number", skill)
+        for shortcut in ("记一下", "收需求", "开始做", "收尾"):
+            self.assertIn(shortcut, skill)
+
+    def test_repository_template_contains_authorization_boundary(self) -> None:
+        template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
+        self.assertIn("## Standing authorization", template)
+        self.assertIn("Ask before", template)
+        self.assertIn("merging", template)
 
 
 if __name__ == "__main__":

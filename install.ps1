@@ -62,23 +62,29 @@ try {
         } else {
             ""
         }
-        if ($Existing.Contains("<!-- agent-project-bootstrap:start -->")) {
-            Write-Host "Global bootstrap rule already exists in $AgentsFile"
-        } else {
-            $Rule = @'
+        $Rule = @'
 
 <!-- agent-project-bootstrap:start -->
-## Agent Project Bootstrap
+## Agent Project Workflow
 
 - On the first substantive request that may modify a Git repository, check for `.codex/agent-project-bootstrap.yml` or equivalent project coordination.
 - If neither exists, use `agent-project-bootstrap` for a read-only audit and offer a concise interactive initialization.
 - Do not create bootstrap files until the user authorizes the proposed scope.
-- Prefer GitHub Issues/Projects for mutable task state, repository `AGENTS.md` for stable policy, pull requests for delivery, and CI for merge gates.
+- Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
+- Treat `记一下`, `收需求`, `开始做`, and `收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
+- Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 '@
-            Add-Content -Path $AgentsFile -Value $Rule
-            Write-Host "Added the optional global bootstrap rule to $AgentsFile"
+        $Pattern = '(?s)\s*<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->\s*'
+        $WithoutOldRule = [regex]::Replace($Existing, $Pattern, "").TrimEnd()
+        if ([string]::IsNullOrWhiteSpace($WithoutOldRule)) {
+            $Updated = $Rule.TrimStart()
+        } else {
+            $Updated = $WithoutOldRule + [Environment]::NewLine + $Rule
         }
+        Set-Content -Path $AgentsFile -Value $Updated -Encoding utf8
+        Write-Host "Added or updated the optional global project-workflow rule in $AgentsFile"
     }
 
     Write-Host "Restart ChatGPT/Codex if the skill does not appear immediately."

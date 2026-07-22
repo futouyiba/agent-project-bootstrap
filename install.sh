@@ -85,24 +85,30 @@ if [ "$with_global_rule" -eq 1 ]; then
   agents_file="$codex_root/AGENTS.md"
   mkdir -p "$codex_root"
   touch "$agents_file"
+  agents_temp="$(mktemp)"
   if grep -q '<!-- agent-project-bootstrap:start -->' "$agents_file"; then
-    printf 'Global bootstrap rule already exists in %s\n' "$agents_file"
+    sed '/<!-- agent-project-bootstrap:start -->/,/<!-- agent-project-bootstrap:end -->/d' "$agents_file" >"$agents_temp"
   else
-    cat >>"$agents_file" <<'EOF'
+    cp "$agents_file" "$agents_temp"
+  fi
+  cat >>"$agents_temp" <<'EOF'
 
 <!-- agent-project-bootstrap:start -->
-## Agent Project Bootstrap
+## Agent Project Workflow
 
 - On the first substantive request that may modify a Git repository, check for `.codex/agent-project-bootstrap.yml` or equivalent project coordination.
 - If neither exists, use `agent-project-bootstrap` for a read-only audit and offer a concise interactive initialization.
 - Do not create bootstrap files until the user authorizes the proposed scope.
-- Prefer GitHub Issues/Projects for mutable task state, repository `AGENTS.md` for stable policy, pull requests for delivery, and CI for merge gates.
+- Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
+- Treat `记一下`, `收需求`, `开始做`, and `收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
+- Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 EOF
-    printf 'Added the optional global bootstrap rule to %s\n' "$agents_file"
-  fi
+  cp "$agents_temp" "$agents_file"
+  rm -f "$agents_temp"
+  printf 'Added or updated the optional global project-workflow rule in %s\n' "$agents_file"
 fi
 
 printf '%s\n' "Restart ChatGPT/Codex if the skill does not appear immediately."
 printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap in Codex."
-
