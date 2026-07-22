@@ -3,8 +3,25 @@
 ## Source of truth
 
 - Use GitHub Issues and this repository's Project as mutable task state. Do not maintain a second editable task table.
-- Record the Project URL and exact statuses here: `Backlog`, `Ready`, `In progress`, `Blocked`, `In review`, `Done`.
 - Treat `.codex/cache/github-snapshot.json` as a disposable read-only cache, never as task state.
+
+## Repository workflow configuration
+
+Bootstrap must replace every placeholder below with a discovered value, or write `pending` plus the reason before declaring setup complete.
+
+- Project URL: `<project-url-or-pending>`
+- Project automation: `<configured-or-pending-with-reason>`
+- Exact status values:
+  - Backlog: `<exact-value>`
+  - Ready: `<exact-value>`
+  - In progress: `<exact-value>`
+  - Blocked: `<exact-value>`
+  - In review: `<exact-value>`
+  - Done: `<exact-value>`
+- Validation commands:
+  - Fast checks: `<command-or-pending>`
+  - Full checks: `<command-or-pending>`
+  - Build: `<command-or-not-applicable>`
 
 ## Natural-language intake
 

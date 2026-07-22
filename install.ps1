@@ -47,7 +47,8 @@ try {
 
     if (Test-Path $Destination) {
         $Timestamp = Get-Date -Format "yyyyMMddHHmmss"
-        $Backup = "$Destination.backup.$Timestamp"
+        $BackupSuffix = [guid]::NewGuid().ToString("N").Substring(0, 8)
+        $Backup = "$Destination.backup.$Timestamp.$BackupSuffix"
         Move-Item -Path $Destination -Destination $Backup
         Write-Host "Existing installation backed up to $Backup"
     }
@@ -63,7 +64,8 @@ try {
         $DestinationHash = (Get-FileHash -Algorithm SHA256 -Path $PromptDestination).Hash
         if ($SourceHash -ne $DestinationHash) {
             $PromptTimestamp = Get-Date -Format "yyyyMMddHHmmss"
-            $PromptBackup = "$PromptDestination.backup.$PromptTimestamp"
+            $PromptBackupSuffix = [guid]::NewGuid().ToString("N").Substring(0, 8)
+            $PromptBackup = "$PromptDestination.backup.$PromptTimestamp.$PromptBackupSuffix"
             Copy-Item -Path $PromptDestination -Destination $PromptBackup
             Write-Host "Existing integrate prompt backed up to $PromptBackup"
         }
@@ -97,8 +99,18 @@ try {
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 '@
-        $Pattern = '(?s)\s*<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->\s*'
-        $WithoutOldRule = [regex]::Replace($Existing, $Pattern, "").TrimEnd()
+        $StartMarker = "<!-- agent-project-bootstrap:start -->"
+        $EndMarker = "<!-- agent-project-bootstrap:end -->"
+        $StartCount = [regex]::Matches($Existing, [regex]::Escape($StartMarker)).Count
+        $EndCount = [regex]::Matches($Existing, [regex]::Escape($EndMarker)).Count
+        if ($StartCount -eq 1 -and $EndCount -eq 1 -and $Existing.IndexOf($StartMarker) -lt $Existing.IndexOf($EndMarker)) {
+            $Pattern = '(?s)\s*<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->\s*'
+            $WithoutOldRule = [regex]::Replace($Existing, $Pattern, "").TrimEnd()
+        } elseif ($StartCount -eq 0 -and $EndCount -eq 0) {
+            $WithoutOldRule = $Existing.TrimEnd()
+        } else {
+            throw "Refusing to update $AgentsFile because managed block markers are incomplete, duplicated, or out of order."
+        }
         if ([string]::IsNullOrWhiteSpace($WithoutOldRule)) {
             $Updated = $Rule.TrimStart()
         } else {

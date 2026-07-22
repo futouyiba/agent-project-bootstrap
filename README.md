@@ -120,14 +120,14 @@ Codex CLI 和 IDE 扩展还可以输入：
 
 ## Agent 与 GitHub 自动化怎样配合
 
-Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 Issue、判断需求是否明确、实现与总结。GitHub Project 的内置 workflow 负责确定性动作：匹配的 Issue/PR 自动进入 Project、新条目默认进入 `Backlog`、Issue 关闭或 PR 合并后进入 `Done`。
+Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 Issue、判断需求是否明确、实现与总结。GitHub Project 的内置 workflow 负责确定性动作：匹配的 Issue 自动进入 Project、Issue 或 draft intake 默认进入 `Backlog`、Issue 关闭后进入 `Done`。PR 默认只作为 Issue 的关联交付记录，不作为第二个 Project 条目。
 
 推荐在每个 Project 的 **Workflows** 页面配置：
 
-1. `Auto-add to project`：筛选目标仓库的条目；
-2. `Item added to project`：Status 设为 `Backlog`；
+1. `Auto-add to project`：只筛选目标仓库的 Issues；
+2. `Item added to project`：只把 Issue/draft intake 的 Status 设为 `Backlog`；
 3. `Issue closed`：Status 设为 `Done`；
-4. `Pull request merged`：Status 设为 `Done`。
+4. 如果团队明确选择同时追踪 PR，PR 加入时直接设为 `In review`，合并后再设为 `Done`。
 
 GitHub 套餐、Project 类型和权限会影响可用 workflow。Bootstrap 会先检测；能通过已连接工具可靠配置时才执行，否则输出准确的网页操作清单并把状态记为 pending，不会假装已经配置好。
 

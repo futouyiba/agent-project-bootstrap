@@ -76,7 +76,7 @@ destination="$skills_root/agent-project-bootstrap"
 mkdir -p "$skills_root"
 
 if [ -e "$destination" ]; then
-  backup="$destination.backup.$(date +%Y%m%d%H%M%S)"
+  backup="$destination.backup.$(date +%Y%m%d%H%M%S).$$"
   mv "$destination" "$backup"
   printf 'Existing installation backed up to %s\n' "$backup"
 fi
@@ -88,7 +88,7 @@ prompts_root="$codex_root/prompts"
 prompt_destination="$prompts_root/integrate.md"
 mkdir -p "$prompts_root"
 if [ -f "$prompt_destination" ] && ! cmp -s "$prompt_source" "$prompt_destination"; then
-  prompt_backup="$prompt_destination.backup.$(date +%Y%m%d%H%M%S)"
+  prompt_backup="$prompt_destination.backup.$(date +%Y%m%d%H%M%S).$$"
   cp "$prompt_destination" "$prompt_backup"
   printf 'Existing integrate prompt backed up to %s\n' "$prompt_backup"
 fi
@@ -100,10 +100,16 @@ if [ "$with_global_rule" -eq 1 ]; then
   mkdir -p "$codex_root"
   touch "$agents_file"
   agents_temp="$(mktemp)"
-  if grep -q '<!-- agent-project-bootstrap:start -->' "$agents_file"; then
+  start_count="$(grep -c '<!-- agent-project-bootstrap:start -->' "$agents_file" || true)"
+  end_count="$(grep -c '<!-- agent-project-bootstrap:end -->' "$agents_file" || true)"
+  if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
     sed '/<!-- agent-project-bootstrap:start -->/,/<!-- agent-project-bootstrap:end -->/d' "$agents_file" >"$agents_temp"
-  else
+  elif [ "$start_count" -eq 0 ] && [ "$end_count" -eq 0 ]; then
     cp "$agents_file" "$agents_temp"
+  else
+    rm -f "$agents_temp"
+    printf 'Refusing to update %s: managed block markers are incomplete or duplicated.\n' "$agents_file" >&2
+    exit 1
   fi
   cat >>"$agents_temp" <<'EOF'
 

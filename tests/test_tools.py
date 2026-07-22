@@ -128,12 +128,39 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("合并收尾", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
+    def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            codex_root = Path(directory) / "codex"
+            codex_root.mkdir(parents=True)
+            agents_file = codex_root / "AGENTS.md"
+            original = "before\n<!-- agent-project-bootstrap:start -->\nstale rule\nafter\n"
+            agents_file.write_text(original, encoding="utf-8")
+
+            result = run(
+                [
+                    "sh",
+                    str(REPOSITORY / "install.sh"),
+                    "--source",
+                    str(REPOSITORY),
+                    "--codex-home",
+                    str(codex_root),
+                    "--with-global-rule",
+                ],
+                REPOSITORY,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("markers are incomplete or duplicated", result.stderr)
+            self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
 
 class SkillContractTests(unittest.TestCase):
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
         skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Bootstrap mode", skill)
         self.assertIn("## Daily-flow mode", skill)
+        self.assertIn("bootstrap mode first", skill)
+        self.assertIn("Preserve the pending task description", skill)
         self.assertIn("Never require the user to supply an Issue number", skill)
         for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾"):
             self.assertIn(shortcut, skill)
@@ -148,6 +175,8 @@ class SkillContractTests(unittest.TestCase):
     def test_repository_template_contains_authorization_boundary(self) -> None:
         template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
         self.assertIn("## Standing authorization", template)
+        self.assertIn("Project URL: `<project-url-or-pending>`", template)
+        self.assertIn("Validation commands", template)
         self.assertIn("Ask before", template)
         self.assertIn("merging", template)
 

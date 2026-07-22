@@ -9,8 +9,8 @@ Keep durable policy in the repository, mutable work in GitHub, implementation in
 
 ## Select the mode
 
-- Use **bootstrap mode** when the repository has not adopted this workflow, the marker is absent, or the user asks to initialize or migrate it.
-- Use **daily-flow mode** when the repository is already configured or the user gives a task-management shortcut or natural-language work request.
+- Use **bootstrap mode first** whenever the repository has not adopted this workflow or the marker is absent, even when the same request contains a daily-flow shortcut. Preserve the pending task description; after authorized bootstrap completes, resolve it again and continue in daily-flow mode without making the user repeat it.
+- Use **daily-flow mode** only after the repository is configured, or when an equivalent existing coordination policy is verified. If the user explicitly declines bootstrap, do not infer standing authorization from this skill.
 - Installation makes this skill available; it does not configure a repository or a GitHub Project. Bootstrap each repository once.
 
 ## Bootstrap mode
@@ -62,7 +62,7 @@ Installing this skill does not create a Project or enable workflows. During boot
 
 1. Detect the repository's existing Project and workflows.
 2. Propose the minimal statuses `Backlog`, `Ready`, `In progress`, `Blocked`, `In review`, and `Done`.
-3. With authorization and supported GitHub tools, configure deterministic automation: matching items are added to the Project, new items enter `Backlog`, and closed Issues or merged PRs enter `Done`.
+3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them directly to `In review` and move merged PRs to `Done`.
 4. If the available tools cannot configure a setting, give the exact GitHub UI checklist and record it as pending rather than claiming success.
 
 After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, and `initialized_at`. This marker records configuration, not task state.
