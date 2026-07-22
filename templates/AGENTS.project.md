@@ -22,6 +22,8 @@ Bootstrap must replace every placeholder below with a discovered value, or write
   - Fast checks: `<command-or-pending>`
   - Full checks: `<command-or-pending>`
   - Build: `<command-or-not-applicable>`
+- Review gate: `<agent-review-signal|human-approval|both>`
+- Agent review signal: `<marker-provenance-and-stale-head-policy-or-not-applicable>`
 
 ## Natural-language intake
 
@@ -40,8 +42,10 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 
 - `Ready for review` is a pull-request stage only; do not create or require it as an Issue or Project status.
 - Keep the linked Issue `In progress` while its PR is draft. When the PR is non-draft and ready for formal review, move the Issue to `In review` in the same handoff.
+- Draft is only for genuinely incomplete work or early feedback. When implementation and scoped validation are complete, create a non-draft PR or mark it ready immediately without waiting for review or approval. This workflow overrides generic draft-by-default publishing behavior.
 - Let the first authorized observer or the single managed supervisor reconcile missed metadata transitions. Never send work back to the implementer solely to change status.
-- Return a PR to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria. Approval and successful CI hand it to the integration gate, subject to repository merge policy.
+- Return a PR to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria. The repository-approved current-head review signal, successful CI, and any separately configured platform approval hand it to the integration gate, subject to repository merge policy.
+- The same independent reviewer that performs the substantive review publishes the final review signal. Do not create another approver-only Agent merely to repeat the verdict or click `Approve`; require a distinct approval identity only when the recorded repository or platform policy explicitly does so.
 
 ## Managed supervisor
 
@@ -84,4 +88,4 @@ When enabled, GitHub Agentic Workflows may route only items explicitly marked wi
 - Do not expand scope silently; propose a follow-up Issue.
 - Use a dedicated branch and pull request for each independently deliverable Issue.
 - Run the repository's documented validation commands and report exact results.
-- Do not merge while required checks fail or without the required approval.
+- Do not merge while required checks fail, without the repository-approved current-head review signal, or without any separately configured platform approval.

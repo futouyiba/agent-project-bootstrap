@@ -7,7 +7,7 @@ Use a progressive cutover:
 3. Migrate only active work that still requires execution, preserving links or legacy identifiers.
 4. Pilot on 3–10 real issues and one area of the project.
 5. Add CI using already working local commands.
-6. Observe several successful pull requests before making CI and approvals mandatory.
+6. Observe several successful pull requests before making CI and the chosen review signal mandatory; do not assume human approvals fit a single-owner, multi-Agent repository.
 7. Remove duplicate live status from old boards and documents.
 8. Enable managed mode only after several real PRs prove that review, CI, branch rules, and escalation boundaries are reliable. Start with `per_turn` merge policy before considering qualified auto-merge.
 

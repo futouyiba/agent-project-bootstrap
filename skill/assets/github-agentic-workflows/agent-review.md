@@ -112,6 +112,10 @@ Leave actionable inline findings with severity and a concrete correction. Use
 `REQUEST_CHANGES` and `agent:needs-rework` for blocking defects. When no blocking
 defect remains, submit a `COMMENT` review whose first line is
 `VERDICT: MERGE_READY` and add `agent:merge-ready`. This marker is a machine
-handoff, not a GitHub approval and not merge authorization. If a product,
+handoff, not a GitHub approval and not merge authorization. It is the final
+repository-approved review signal from this independent substantive review;
+do not dispatch another approver-only Agent to repeat it. Require a distinct
+GitHub approval identity only when the repository or platform explicitly
+configures that separate gate. If a product,
 security, or policy decision is needed, use `needs:human` and state the
 single decision required.

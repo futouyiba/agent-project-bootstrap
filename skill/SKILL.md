@@ -72,8 +72,13 @@ After successful setup, create or update `.codex/agent-project-bootstrap.yml` wi
 
 - Treat `Ready for review` as a pull-request stage only. Do not add or require it as an Issue or Project status; use `In review` for the linked Issue.
 - Keep the Issue `In progress` while its PR is a draft. When the PR becomes non-draft and ready for formal review, move the linked Issue to `In review` in the same handoff.
+- Treat Draft readiness and merge readiness as separate decisions. Exit Draft when the scoped implementation and validation are complete enough for a reviewer to decide; do not require a repository-approved review signal, external approval, or successful merge-gate result first, because those are downstream evidence collected after formal review begins.
+- Draft is only for genuinely incomplete work or intentionally early feedback. In this workflow, the rule above overrides any generic publishing tool's draft-by-default convention: if implementation and scoped validation are already complete when the PR is created, create it non-draft or mark it ready immediately without waiting for review or approval.
+- Classify every blocker as an implementation/acceptance defect, evidence gap, metadata lag, external authorization, or dependency/baseline change. Return work to implementation only for the first class or for a real code conflict; repair metadata directly, collect missing evidence at the appropriate stage, and report external gates without describing the code as defective.
+- Reject circular state rules. If a review signal, external approval, or gate can only be satisfied on a non-draft PR, mark the completed PR ready, request that evidence, and keep merge blocked until it arrives.
 - Drive routine state transitions from observable GitHub events. The first authorized agent or the repository's single supervisor that observes a missed transition should reconcile it idempotently; never send work back to the implementer solely to edit metadata.
-- Once current-head review and CI gates pass, hand the PR to the integrator or configured auto-merge policy. Return it to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria.
+- Once the repository-approved current-head review signal and CI gates pass, hand the PR to the integrator or configured auto-merge policy. Return it to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria.
+- The independent reviewer that performs the substantive review should also publish the repository-approved final review signal. Do not create a second approver-only Agent merely to repeat the conclusion or click `Approve`; require a distinct GitHub approval identity only when repository rules or the platform explicitly configure it as a separate gate.
 
 ## Daily-flow mode
 

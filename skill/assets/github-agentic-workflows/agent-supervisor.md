@@ -78,13 +78,19 @@ Choose at most one next role for each item and dispatch no more than three total
   or for an active managed PR with actionable review/CI feedback;
 - `agent-review` for a managed non-draft PR whose current head needs independent
   review after checks are available;
-- `agent-integrate` for a managed PR that appears approved and green, solely to
-  verify merge readiness. The integrator must not merge.
+- `agent-integrate` for a managed PR that has the repository-approved
+  current-head review signal and appears green, solely to verify merge
+  readiness. The integrator must not merge.
 
 Treat `Ready for review` as PR state only. Never dispatch `agent-implement` merely
 to change an Issue/Project status or another metadata field. Reconcile routine
 metadata through the authorized workflow layer; dispatch implementation only when
 code, tests, conflicts, review findings, or acceptance evidence require work.
+Completed implementation must be non-draft before independent review; do not
+wait for review or approval to make it ready. The independent reviewer publishes
+the final review signal in the same pass. Never dispatch an approver-only role
+unless repository or platform policy explicitly requires a distinct GitHub
+approval identity.
 
 Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 `reason`. Prefer resuming active PRs before selecting new Issues. Do not dispatch

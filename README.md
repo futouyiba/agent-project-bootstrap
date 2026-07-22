@@ -99,7 +99,7 @@ Set-Location agent-project-bootstrap
 
 你不需要知道 Issue 编号，也不用复述“读取验收标准、建分支、开 PR、更新 In review、不要合并”等长提示。Agent 应先用描述查找：只有一个明显结果就直接采用；多个相近结果只列出最可能的两三个供确认；没有结果时再按仓库授权创建或提出 Issue。
 
-`收尾` 只检查和整理，不授权合并。`合并收尾` 是当前这一次任务的明确合并授权：Agent 重新读取 GitHub，按依赖顺序逐个处理已批准 PR；每次合并后刷新剩余项目；CI、冲突、评审线程或验收条件不满足的项目会被跳过。该授权不包含部署、发布或扩大范围。
+`收尾` 只检查和整理，不授权合并。`合并收尾` 是当前这一次任务的明确合并授权：Agent 重新读取 GitHub，按依赖顺序逐个处理已达到 merge-ready 的 PR；每次合并后刷新剩余项目；CI、冲突、评审线程或验收条件不满足的项目会被跳过。该授权不包含部署、发布或扩大范围。
 
 Codex CLI 和 IDE 扩展还可以输入：
 
@@ -175,6 +175,8 @@ GitHub 事件/30 分钟兜底心跳
 - `agent-review`：独立审查，留下 `VERDICT: MERGE_READY` 或阻塞意见；
 - `agent-integrate`：重新核对当前 head、CI、依赖和评论，但**不执行合并**。
 
+独立审查者在同一次实质审查中留下最终评审信号，不再另派一个只负责重复结论或点击 `Approve` 的 Agent。只有仓库 ruleset、分支保护或明确记录的政策要求另一个 GitHub 身份批准时，那项平台 Approval 才作为单独门禁保留。
+
 它不是安装全局 Skill 后自动开启的。每个仓库都要先做只读计划：
 
 ```sh
@@ -215,7 +217,7 @@ Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation 
 
 Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 Issue、判断需求是否明确、实现与总结。GitHub Project 的内置 workflow 负责确定性动作：匹配的 Issue 自动进入 Project、Issue 或 draft intake 默认进入 `Backlog`、Issue 关闭后进入 `Done`。PR 默认只作为 Issue 的关联交付记录，不作为第二个 Project 条目。
 
-这里严格区分 Issue/Project 状态与 PR 阶段：`Ready for review` 只属于 PR。PR 仍为 Draft 时，关联 Issue 保持 `In progress`；PR 转为非 Draft 并正式请求审查时，Issue 同步进入 `In review`。审批、CI、冲突和是否可合并直接读取 PR，不再复制成 Issue 状态。遗漏的纯元数据转换由 GitHub workflow 或单一托管主管纠正，不把任务退回实现者；只有代码、测试、冲突、评审问题或验收证据需要变化时才重新唤醒实现者。
+这里严格区分 Issue/Project 状态与 PR 阶段：`Ready for review` 只属于 PR。Draft 只表示工作尚未完成或主动征求早期反馈；实现范围和规定的自测一完成，就应创建非 Draft PR 或立即转为 Ready，不等待审查或批准。该规则覆盖通用 GitHub 发布工具的“默认 Draft”习惯。PR 仍为 Draft 时，关联 Issue 保持 `In progress`；PR 转为非 Draft 并正式请求审查时，Issue 同步进入 `In review`。当前提交上的独立评审信号、CI、冲突和是否可合并直接读取 PR，不再复制成 Issue 状态。遗漏的纯元数据转换由 GitHub workflow 或单一托管主管纠正，不把任务退回实现者；只有代码、测试、冲突、评审问题或验收证据需要变化时才重新唤醒实现者。
 
 推荐在每个 Project 的 **Workflows** 页面配置：
 

@@ -17,10 +17,10 @@ After the workflow succeeds at least once, configure a branch ruleset or protect
 
 1. require a pull request;
 2. require the stable CI check;
-3. require an appropriate number of approvals;
+3. choose the review gate explicitly: required human approvals, a repository-approved Agent review signal, or both;
 4. block force pushes and default-branch deletion;
 5. decide explicitly whether administrators and automation may bypass.
 
-Do not enable every setting automatically. Signed commits, linear history, merge queues, stale-approval dismissal, and deployment gates are project policy choices.
+Do not enable every setting automatically. A single-owner repository may set required approvals to zero and use a traceable current-head Agent review signal instead; document its marker, provenance, stale-head behavior, and blocking-finding semantics in `AGENTS.md`. Never call that signal a human GitHub approval. Signed commits, linear history, merge queues, stale-approval dismissal, and deployment gates are project policy choices.
 
 For managed mode, decide separately whether qualifying low-risk PRs may use GitHub auto-merge or a merge queue. Record that standing policy in repository `AGENTS.md`; installing the skill or enabling CI alone never authorizes automatic merge. Keep high-risk paths and labels outside unattended merge.

@@ -279,6 +279,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("GitHub Agentic Workflows profile", agents)
             self.assertIn("staged on first installation", agents)
             self.assertIn("`Ready for review` is a pull-request stage only", agents)
+            self.assertIn("without waiting for review or approval", agents)
+            self.assertIn("Do not create an approver-only Agent", agents)
             self.assertIn("Never send work back to the implementer solely", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
@@ -420,7 +422,7 @@ class SkillContractTests(unittest.TestCase):
         daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("## Integrate approved pull requests", daily_flow)
+        self.assertIn("## Integrate merge-ready pull requests", daily_flow)
         self.assertIn("Merge one PR, refresh GitHub state", daily_flow)
         self.assertIn("does not include deployment", daily_flow)
         self.assertIn("`Ready for review` is a PR stage", daily_flow)
@@ -474,12 +476,17 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("dispatch-workflow", supervisor)
         self.assertIn("terminal handoff", supervisor)
         self.assertIn("After three failed cycles", supervisor)
+        self.assertIn("Completed implementation must be non-draft before independent review", supervisor)
+        self.assertIn("Never dispatch an approver-only role", supervisor)
+        self.assertIn("repository-approved\n  current-head review signal", supervisor)
         self.assertIn("AGENT-CYCLE:", implementer)
         self.assertIn("needs:human", supervisor)
         self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 3)
         self.assertIn("github.event.workflow_run.event == 'pull_request'", supervisor)
         self.assertIn("branches: [__CI_BRANCH_PATTERN__]", supervisor)
         self.assertIn("create-pull-request", implementer)
+        self.assertIn("draft: false", implementer)
+        self.assertIn("Never wait for review or approval before making completed work ready", implementer)
         self.assertIn("needs.pre_activation.outputs.managed_target_result", implementer)
         self.assertIn("needs: [managed-target-gate]", implementer)
         self.assertIn("Recheck managed target before writes", implementer)
@@ -489,6 +496,8 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertEqual(implementer.count("required-labels: [agent:managed]"), 4)
         self.assertIn("submit-pull-request-review", reviewer)
+        self.assertIn("repository-approved review signal", reviewer)
+        self.assertIn("do not dispatch another approver-only Agent", reviewer)
         self.assertIn("Recheck managed pull request before writes", reviewer)
         self.assertIn("needs: [managed-target-gate]", reviewer)
         self.assertEqual(reviewer.count("required-labels: [agent:managed]"), 4)
@@ -513,6 +522,9 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("## Issue and PR state semantics", template)
         self.assertIn("`Ready for review` is a pull-request stage only", template)
         self.assertIn("Never send work back to the implementer solely", template)
+        self.assertIn("Review gate: `<agent-review-signal|human-approval|both>`", template)
+        self.assertIn("without waiting for review or approval", template)
+        self.assertIn("Do not create another approver-only Agent", template)
 
     def test_in_review_requires_ready_for_review_not_pr_creation(self) -> None:
         template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")
@@ -538,8 +550,67 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn("non-draft and ready for formal review", content)
         self.assertIn("keep it draft and leave the Issue `In progress`", daily_flow)
         self.assertIn("Move the linked Issue to `In review`", daily_flow)
-        self.assertIn("a draft PR keeps its linked Issue `In progress`", managed_supervisor)
-        self.assertIn("ready for formal review puts it in `In review`", managed_supervisor)
+        self.assertIn("incomplete PR draft and its linked Issue `In progress`", managed_supervisor)
+        self.assertIn("ready for formal review and move its linked Issue to `In review`", managed_supervisor)
+
+    def test_review_starts_after_implementation_not_after_approval(self) -> None:
+        skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        daily_flow = (
+            REPOSITORY / "skill" / "references" / "daily-project-flow.md"
+        ).read_text(encoding="utf-8")
+        managed = (
+            REPOSITORY / "skill" / "references" / "managed-autopilot.md"
+        ).read_text(encoding="utf-8")
+        supervisor = (
+            REPOSITORY / "skill" / "assets" / "codex-managed-supervisor.md"
+        ).read_text(encoding="utf-8")
+        event_supervisor = (
+            REPOSITORY
+            / "skill"
+            / "assets"
+            / "github-agentic-workflows"
+            / "agent-supervisor.md"
+        ).read_text(encoding="utf-8")
+        template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(
+            encoding="utf-8"
+        )
+        posix_installer = (REPOSITORY / "install.sh").read_text(encoding="utf-8")
+        powershell_installer = (REPOSITORY / "install.ps1").read_text(encoding="utf-8")
+        integrate_prompt = (REPOSITORY / "prompts" / "integrate.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (skill, daily_flow, supervisor, template, posix_installer, powershell_installer):
+            self.assertIn("without waiting for review or approval", content)
+        self.assertIn("overrides any generic publishing tool's draft-by-default convention", skill)
+        self.assertIn("supervisor that observes the lag repairs it directly", managed)
+        self.assertIn("repository-approved current-head review signal", integrate_prompt)
+        self.assertNotIn("all required approvals", integrate_prompt)
+
+        for content in (skill, daily_flow, managed, supervisor, template):
+            self.assertIn("approver-only Agent", content)
+        self.assertIn("approver-only role", event_supervisor)
+
+        contradictory_rules = (
+            "wait for approval before marking",
+            "wait for review before marking",
+            "review before marking the PR ready",
+            "approval before marking the PR ready",
+            "keep it draft until approval",
+            "keep it draft until review",
+        )
+        for content in (
+            skill,
+            daily_flow,
+            managed,
+            supervisor,
+            event_supervisor,
+            template,
+            posix_installer,
+            powershell_installer,
+        ):
+            for contradiction in contradictory_rules:
+                self.assertNotIn(contradiction, content.lower())
 
 
 if __name__ == "__main__":
