@@ -93,7 +93,7 @@ def main() -> int:
     workflows = []
     if workflows_dir.is_dir():
         workflows = sorted(
-            str(path.relative_to(root))
+            path.relative_to(root).as_posix()
             for path in workflows_dir.iterdir()
             if path.is_file() and path.suffix in {".yml", ".yaml"}
         )
@@ -144,4 +144,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
