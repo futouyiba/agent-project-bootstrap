@@ -7,6 +7,7 @@
 - 一个可安装的 Codex/ChatGPT Skill；
 - 新项目和存量项目的交互式初始化流程；
 - 不要求记住 Issue 编号的自然语言日常工作流；
+- 全局“合并收尾”意图，以及 Codex CLI/IDE 的 `/prompts:integrate` 快捷入口；
 - Issue、PR、CI、分支保护和 worktree 隔离的实践规范；
 - macOS、Linux 和 Windows 安装器；
 - 一个可选的 GitHub Issues/PR 本地只读快照。
@@ -15,7 +16,7 @@
 
 ### macOS / Linux
 
-只安装 Skill：
+安装全局 Skill 和 CLI/IDE 快捷入口：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/futouyiba/agent-project-bootstrap/main/install.sh | sh
@@ -29,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/futouyiba/agent-project-bootstrap/m
 
 ### Windows PowerShell
 
-只安装 Skill：
+安装全局 Skill 和 CLI/IDE 快捷入口：
 
 ```powershell
 irm https://raw.githubusercontent.com/futouyiba/agent-project-bootstrap/main/install.ps1 | iex
@@ -41,7 +42,7 @@ irm https://raw.githubusercontent.com/futouyiba/agent-project-bootstrap/main/ins
 $installer = irm https://raw.githubusercontent.com/futouyiba/agent-project-bootstrap/main/install.ps1; & ([scriptblock]::Create($installer)) -WithGlobalRule
 ```
 
-安装器默认写入 `$CODEX_HOME/skills`，未设置 `CODEX_HOME` 时写入 `~/.codex/skills`。如果已经安装旧版本，旧目录会先被重命名为带时间戳的备份。再次使用 `--with-global-rule` 会升级这个项目自己管理的规则块，不会覆盖其他全局说明。
+安装器默认把 Skill 写入 `$CODEX_HOME/skills`，把快捷 Prompt 写入 `$CODEX_HOME/prompts/integrate.md`；未设置 `CODEX_HOME` 时使用 `~/.codex`。如果已经安装旧版 Skill，旧目录会先被重命名为带时间戳的备份；不同内容的同名 Prompt 也会先备份。再次使用 `--with-global-rule` 会升级这个项目自己管理的规则块，不会覆盖其他全局说明。
 
 也可以先克隆仓库，再离线安装：
 
@@ -89,15 +90,28 @@ Set-Location agent-project-bootstrap
 收需求：把刚才确认的三个事项整理进去
 开始做：修复首次登录时偶发的白屏
 收尾
+合并收尾
 ```
 
 你不需要知道 Issue 编号，也不用复述“读取验收标准、建分支、开 PR、更新 In review、不要合并”等长提示。Agent 应先用描述查找：只有一个明显结果就直接采用；多个相近结果只列出最可能的两三个供确认；没有结果时再按仓库授权创建或提出 Issue。
+
+`收尾` 只检查和整理，不授权合并。`合并收尾` 是当前这一次任务的明确合并授权：Agent 重新读取 GitHub，按依赖顺序逐个处理已批准 PR；每次合并后刷新剩余项目；CI、冲突、评审线程或验收条件不满足的项目会被跳过。该授权不包含部署、发布或扩大范围。
+
+Codex CLI 和 IDE 扩展还可以输入：
+
+```text
+/prompts:integrate
+/prompts:integrate 本周迭代
+```
+
+自定义 Slash Prompt 是 Codex 当前保留的兼容机制，官方已标记为 deprecated，并且只适用于 CLI 和 IDE 扩展。因此它只是快捷外壳：真正的全局、跨客户端工作流仍由 Skill 和“合并收尾”自然语言意图承担；ChatGPT 桌面端直接输入“合并收尾”即可。
 
 ### 三层配置分别负责什么
 
 | 层级 | 作用 | 是否安装后自动完成 |
 |---|---|---|
 | Skill | 理解初始化和日常流程 | 是 |
+| 全局 Prompt | 在 CLI/IDE 提供 `/prompts:integrate` | 是，但属于 deprecated 兼容入口 |
 | 全局 `AGENTS.md` | 记住个人通用偏好：不要求 Issue 编号、识别短语、遇到歧义再问 | 仅使用 `--with-global-rule` 时 |
 | 仓库 `AGENTS.md` | 保存 Project 地址、精确状态名、测试命令和常规授权边界 | 每个仓库 bootstrap 时 |
 | GitHub Project workflows | 自动加入 Project、默认 Backlog、关闭或合并后 Done | 每个 Project 单独配置 |

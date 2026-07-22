@@ -88,6 +88,9 @@ class PosixInstallerTests(unittest.TestCase):
     def test_local_install_and_global_rule_are_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             codex_root = Path(directory) / "codex"
+            prompts_root = codex_root / "prompts"
+            prompts_root.mkdir(parents=True)
+            (prompts_root / "integrate.md").write_text("user-owned prompt\n", encoding="utf-8")
             command = [
                 "sh",
                 str(REPOSITORY / "install.sh"),
@@ -102,6 +105,12 @@ class PosixInstallerTests(unittest.TestCase):
             destination = codex_root / "skills" / "agent-project-bootstrap"
             self.assertTrue((destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
+            integrate_prompt = codex_root / "prompts" / "integrate.md"
+            self.assertTrue(integrate_prompt.exists())
+            self.assertIn("Use $$agent-project-bootstrap", integrate_prompt.read_text(encoding="utf-8"))
+            prompt_backups = list((codex_root / "prompts").glob("integrate.md.backup.*"))
+            self.assertEqual(len(prompt_backups), 1)
+            self.assertEqual(prompt_backups[0].read_text(encoding="utf-8"), "user-owned prompt\n")
 
             agents_file = codex_root / "AGENTS.md"
             old_rule = agents_file.read_text(encoding="utf-8").replace(
@@ -116,6 +125,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertEqual(agents.count("<!-- agent-project-bootstrap:start -->"), 1)
             self.assertNotIn("OUTDATED RULE", agents)
             self.assertIn("never require the user to know an Issue number", agents)
+            self.assertIn("合并收尾", agents)
+            self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
 
 class SkillContractTests(unittest.TestCase):
@@ -124,8 +135,15 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("## Bootstrap mode", skill)
         self.assertIn("## Daily-flow mode", skill)
         self.assertIn("Never require the user to supply an Issue number", skill)
-        for shortcut in ("记一下", "收需求", "开始做", "收尾"):
+        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾"):
             self.assertIn(shortcut, skill)
+
+        daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Integrate approved pull requests", daily_flow)
+        self.assertIn("Merge one PR, refresh GitHub state", daily_flow)
+        self.assertIn("does not include deployment", daily_flow)
 
     def test_repository_template_contains_authorization_boundary(self) -> None:
         template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")

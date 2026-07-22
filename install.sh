@@ -46,7 +46,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 if [ -n "$source_dir" ]; then
-  skill_source="${source_dir%/}/skill"
+  package_root="${source_dir%/}"
 else
   command -v curl >/dev/null 2>&1 || {
     printf '%s\n' "curl is required for remote installation." >&2
@@ -60,10 +60,13 @@ else
   archive_path="$temporary_dir/source.tar.gz"
   curl -fsSL "https://github.com/$repository_slug/archive/refs/heads/$repository_ref.tar.gz" -o "$archive_path"
   tar -xzf "$archive_path" -C "$temporary_dir"
-  skill_source="$temporary_dir/agent-project-bootstrap-$repository_ref/skill"
+  package_root="$temporary_dir/agent-project-bootstrap-$repository_ref"
 fi
 
-if [ ! -f "$skill_source/SKILL.md" ] || [ ! -f "$skill_source/agents/openai.yaml" ]; then
+skill_source="$package_root/skill"
+prompt_source="$package_root/prompts/integrate.md"
+
+if [ ! -f "$skill_source/SKILL.md" ] || [ ! -f "$skill_source/agents/openai.yaml" ] || [ ! -f "$prompt_source" ]; then
   printf 'Invalid source: expected an installable skill at %s\n' "$skill_source" >&2
   exit 1
 fi
@@ -80,6 +83,17 @@ fi
 
 cp -R "$skill_source" "$destination"
 printf 'Installed agent-project-bootstrap to %s\n' "$destination"
+
+prompts_root="$codex_root/prompts"
+prompt_destination="$prompts_root/integrate.md"
+mkdir -p "$prompts_root"
+if [ -f "$prompt_destination" ] && ! cmp -s "$prompt_source" "$prompt_destination"; then
+  prompt_backup="$prompt_destination.backup.$(date +%Y%m%d%H%M%S)"
+  cp "$prompt_destination" "$prompt_backup"
+  printf 'Existing integrate prompt backed up to %s\n' "$prompt_backup"
+fi
+cp "$prompt_source" "$prompt_destination"
+printf 'Installed global /prompts:integrate shortcut to %s\n' "$prompt_destination"
 
 if [ "$with_global_rule" -eq 1 ]; then
   agents_file="$codex_root/AGENTS.md"
@@ -100,7 +114,8 @@ if [ "$with_global_rule" -eq 1 ]; then
 - If neither exists, use `agent-project-bootstrap` for a read-only audit and offer a concise interactive initialization.
 - Do not create bootstrap files until the user authorizes the proposed scope.
 - Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
-- Treat `记一下`, `收需求`, `开始做`, and `收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, and `合并收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Treat an explicit `合并收尾` request or the expanded `/prompts:integrate` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
 - Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
@@ -112,3 +127,4 @@ fi
 
 printf '%s\n' "Restart ChatGPT/Codex if the skill does not appear immediately."
 printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap in Codex."
+printf '%s\n' "In Codex CLI/IDE, use /prompts:integrate for the deprecated custom-prompt shortcut."

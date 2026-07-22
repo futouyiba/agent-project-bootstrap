@@ -1,6 +1,6 @@
 ---
 name: agent-project-bootstrap
-description: Initialize or migrate a Git repository for coordinated agent development, and operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow from natural-language requests. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, or 收尾.
+description: Initialize or migrate a Git repository for coordinated agent development, and operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow from natural-language requests. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, 收尾, or 合并收尾.
 ---
 
 # Agent Project Workflow
@@ -87,6 +87,7 @@ Never require the user to supply an Issue number.
 - **收需求** — extract, deduplicate, and search a batch of clear items; present one compact confirmation before creating anything not already authorized.
 - **开始做 + natural-language description** — resolve the matching Issue, move it to `In progress`, create a branch, implement, validate, and open a linked PR when authorized.
 - **收尾** — inspect the linked Issue, PR, review, and CI; record evidence and move to the appropriate status, but ask before merge, deployment, deletion, or other gated actions.
+- **合并收尾 + optional scope** — treat the user's invocation as merge authorization for this turn only. Read the integration procedure in [daily project flow](references/daily-project-flow.md), merge only qualifying PRs in the current repository, and never deploy or publish.
 
 ### Apply standing authorization
 
@@ -105,7 +106,7 @@ Ask before:
 - changing scope or acceptance criteria;
 - closing as `Not planned`;
 - deleting records;
-- merging a PR;
+- merging a PR, unless the user explicitly invoked `合并收尾` or otherwise authorized the merge for this turn;
 - publishing or deploying.
 
 Repository policy may narrow this authorization. Tool and platform approval prompts still apply and cannot be bypassed.

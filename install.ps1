@@ -21,7 +21,7 @@ if ([string]::IsNullOrWhiteSpace($CodexHome)) {
 
 try {
     if (-not [string]::IsNullOrWhiteSpace($Source)) {
-        $SkillSource = Join-Path (Resolve-Path $Source) "skill"
+        $PackageRoot = Resolve-Path $Source
     } else {
         $TemporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("agent-project-bootstrap-" + [guid]::NewGuid())
         New-Item -ItemType Directory -Path $TemporaryDirectory | Out-Null
@@ -29,11 +29,15 @@ try {
         $ArchiveUrl = "https://github.com/$RepositorySlug/archive/refs/heads/$RepositoryRef.zip"
         Invoke-WebRequest -Uri $ArchiveUrl -OutFile $ArchivePath
         Expand-Archive -Path $ArchivePath -DestinationPath $TemporaryDirectory
-        $SkillSource = Join-Path $TemporaryDirectory "agent-project-bootstrap-$RepositoryRef/skill"
+        $PackageRoot = Join-Path $TemporaryDirectory "agent-project-bootstrap-$RepositoryRef"
     }
 
+    $SkillSource = Join-Path $PackageRoot "skill"
+    $PromptSource = Join-Path (Join-Path $PackageRoot "prompts") "integrate.md"
+
     if (-not (Test-Path (Join-Path $SkillSource "SKILL.md")) -or
-        -not (Test-Path (Join-Path $SkillSource "agents/openai.yaml"))) {
+        -not (Test-Path (Join-Path $SkillSource "agents/openai.yaml")) -or
+        -not (Test-Path $PromptSource)) {
         throw "Invalid source: expected an installable skill at $SkillSource"
     }
 
@@ -50,6 +54,22 @@ try {
 
     Copy-Item -Recurse -Path $SkillSource -Destination $Destination
     Write-Host "Installed agent-project-bootstrap to $Destination"
+
+    $PromptsRoot = Join-Path $CodexRoot "prompts"
+    $PromptDestination = Join-Path $PromptsRoot "integrate.md"
+    New-Item -ItemType Directory -Force -Path $PromptsRoot | Out-Null
+    if (Test-Path $PromptDestination) {
+        $SourceHash = (Get-FileHash -Algorithm SHA256 -Path $PromptSource).Hash
+        $DestinationHash = (Get-FileHash -Algorithm SHA256 -Path $PromptDestination).Hash
+        if ($SourceHash -ne $DestinationHash) {
+            $PromptTimestamp = Get-Date -Format "yyyyMMddHHmmss"
+            $PromptBackup = "$PromptDestination.backup.$PromptTimestamp"
+            Copy-Item -Path $PromptDestination -Destination $PromptBackup
+            Write-Host "Existing integrate prompt backed up to $PromptBackup"
+        }
+    }
+    Copy-Item -Force -Path $PromptSource -Destination $PromptDestination
+    Write-Host "Installed global /prompts:integrate shortcut to $PromptDestination"
 
     if ($WithGlobalRule) {
         New-Item -ItemType Directory -Force -Path $CodexRoot | Out-Null
@@ -71,7 +91,8 @@ try {
 - If neither exists, use `agent-project-bootstrap` for a read-only audit and offer a concise interactive initialization.
 - Do not create bootstrap files until the user authorizes the proposed scope.
 - Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
-- Treat `记一下`, `收需求`, `开始做`, and `收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, and `合并收尾` as shortcuts for the `agent-project-bootstrap` daily flow.
+- Treat an explicit `合并收尾` request or the expanded `/prompts:integrate` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
 - Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
@@ -89,6 +110,7 @@ try {
 
     Write-Host "Restart ChatGPT/Codex if the skill does not appear immediately."
     Write-Host 'Invoke with @agent-project-bootstrap in ChatGPT or $agent-project-bootstrap in Codex.'
+    Write-Host 'In Codex CLI/IDE, use /prompts:integrate for the deprecated custom-prompt shortcut.'
 }
 finally {
     if ($null -ne $TemporaryDirectory -and (Test-Path $TemporaryDirectory)) {

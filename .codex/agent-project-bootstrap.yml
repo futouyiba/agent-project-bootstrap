@@ -1,4 +1,4 @@
-version: 2
+version: 3
 profile: delivery
 task_system: github
 workflow_mode: bootstrap_and_daily

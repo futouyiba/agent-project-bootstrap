@@ -10,12 +10,13 @@
 
 - The user does not need to know an Issue number. Search the fresh local snapshot and GitHub from their description.
 - For one clear match, select it and report its number. For several plausible matches, show the best two or three and ask one question.
-- Treat `记一下`, `收需求`, `开始做`, and `收尾` as workflow shortcuts described by `agent-project-bootstrap`.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, and `合并收尾` as workflow shortcuts described by `agent-project-bootstrap`.
 
 ## Standing authorization
 
 - For a clearly selected task, the agent may read GitHub state, move `Ready` to `In progress`, create a task branch, open and link a PR, move to `In review`, and record validation results.
 - Ask before creating work not clearly implied by the conversation, changing scope or acceptance criteria, closing as `Not planned`, deleting records, merging, publishing, or deploying.
+- `合并收尾` explicitly authorizes merging qualifying PRs for that turn only; it never authorizes deployment or publishing.
 - Platform approval prompts still apply. A direct user request can grant narrower or broader authorization for that request.
 
 ## Delivery
