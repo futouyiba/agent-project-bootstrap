@@ -1,4 +1,4 @@
-version: 4
+version: 5
 profile: delivery
 task_system: github
 workflow_mode: bootstrap_and_daily
@@ -17,5 +17,17 @@ managed_mode:
   low_risk_merge_criteria: null
   high_risk_paths_or_labels: []
   human_gates: skill_defaults
+  deployment_and_publishing: never
+github_agentic_workflows:
+  enabled: false
+  rollout: off
+  engine: null
+  gh_aw_version: null
+  source_files: []
+  compiled_lock_files: []
+  required_secret: null
+  routing_labels: []
+  supervisor_schedule: null
+  merge_capability: disabled
   deployment_and_publishing: never
 initialized_at: 2026-07-23

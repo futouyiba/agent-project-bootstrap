@@ -13,6 +13,7 @@ from pathlib import Path
 REPOSITORY = Path(__file__).resolve().parents[1]
 AUDIT = REPOSITORY / "skill" / "scripts" / "audit_project.py"
 SNAPSHOT = REPOSITORY / "skill" / "scripts" / "snapshot_github.py"
+AGENTIC = REPOSITORY / "skill" / "scripts" / "configure_agentic_workflows.py"
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -83,6 +84,65 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(status["pull_request_count"], 1)
 
 
+class AgenticWorkflowConfiguratorTests(unittest.TestCase):
+    def test_plan_is_read_only_and_defaults_to_staged_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            result = run([sys.executable, str(AGENTIC), str(root)], root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["engine"], "codex")
+            self.assertEqual(report["rollout"], "staged")
+            self.assertEqual(report["required_secret"], "OPENAI_API_KEY")
+            self.assertTrue(all(item["action"] == "create" for item in report["files"]))
+            self.assertFalse((root / ".github").exists())
+
+    def test_apply_renders_four_workflows_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            command = [
+                sys.executable,
+                str(AGENTIC),
+                str(root),
+                "--engine",
+                "codex",
+                "--apply",
+            ]
+            first = run(command, root)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            workflows = sorted((root / ".github" / "workflows").glob("agent-*.md"))
+            self.assertEqual(len(workflows), 4)
+            for workflow in workflows:
+                content = workflow.read_text(encoding="utf-8")
+                self.assertIn("engine: codex", content)
+                self.assertIn("staged: true", content)
+                self.assertNotIn("__ENGINE__", content)
+                self.assertNotIn("__STAGED__", content)
+                self.assertNotIn("__DEFAULT_BRANCH__", content)
+                self.assertNotIn("__CI_WORKFLOW__", content)
+
+            second = run(command, root)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            report = json.loads(second.stdout)
+            self.assertTrue(all(item["action"] == "unchanged" for item in report["files"]))
+
+    def test_conflict_refuses_all_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            conflict = workflows / "agent-review.md"
+            conflict.write_text("user-owned\n", encoding="utf-8")
+
+            result = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+            self.assertEqual(result.returncode, 3)
+            self.assertEqual(conflict.read_text(encoding="utf-8"), "user-owned\n")
+            self.assertFalse((workflows / "agent-supervisor.md").exists())
+
+
 @unittest.skipIf(os.name == "nt", "POSIX installer test")
 class PosixInstallerTests(unittest.TestCase):
     def test_local_install_and_global_rule_are_idempotent(self) -> None:
@@ -106,6 +166,10 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertTrue((destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
             self.assertTrue((destination / "assets" / "codex-managed-supervisor.md").exists())
+            self.assertTrue((destination / "scripts" / "configure_agentic_workflows.py").exists())
+            self.assertTrue(
+                (destination / "assets" / "github-agentic-workflows" / "agent-supervisor.md").exists()
+            )
             integrate_prompt = codex_root / "prompts" / "integrate.md"
             self.assertTrue(integrate_prompt.exists())
             self.assertIn("Use $$agent-project-bootstrap", integrate_prompt.read_text(encoding="utf-8"))
@@ -130,6 +194,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("and `托管` as shortcuts", agents)
             self.assertIn("Bare `托管` means the current repository", agents)
             self.assertIn("one durable supervisor", agents)
+            self.assertIn("GitHub Agentic Workflows profile", agents)
+            self.assertIn("staged on first installation", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
     def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
@@ -296,12 +362,36 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Scheduled heartbeats are not GitHub webhooks", managed)
         self.assertIn("end this heartbeat quietly", prompt)
         self.assertIn("Never deploy or publish", prompt)
-        self.assertIn("version: 4", marker)
+        self.assertIn("version: 5", marker)
         self.assertIn("managed_mode:", marker)
         self.assertIn("level: off", marker)
         self.assertIn("goal_scope: null", marker)
         self.assertIn("retry_limit: 3", marker)
         self.assertIn("merge_policy: per_turn", marker)
+        self.assertIn("github_agentic_workflows:", marker)
+        self.assertIn("rollout: off", marker)
+        self.assertIn("merge_capability: disabled", marker)
+
+    def test_event_driven_profile_is_staged_and_merge_free(self) -> None:
+        reference = (
+            REPOSITORY / "skill" / "references" / "github-agentic-workflows.md"
+        ).read_text(encoding="utf-8")
+        assets = REPOSITORY / "skill" / "assets" / "github-agentic-workflows"
+        supervisor = (assets / "agent-supervisor.md").read_text(encoding="utf-8")
+        implementer = (assets / "agent-implement.md").read_text(encoding="utf-8")
+        reviewer = (assets / "agent-review.md").read_text(encoding="utf-8")
+        integrator = (assets / "agent-integrate.md").read_text(encoding="utf-8")
+
+        self.assertIn("--apply", reference)
+        self.assertIn("staged", reference)
+        self.assertIn("agent:managed", reference)
+        self.assertIn("dispatch-workflow", supervisor)
+        self.assertIn("terminal handoff", supervisor)
+        self.assertIn("create-pull-request", implementer)
+        self.assertIn("submit-pull-request-review", reviewer)
+        self.assertIn("Never call a merge API", integrator)
+        for content in (supervisor, implementer, reviewer, integrator):
+            self.assertNotIn("merge-pull-request", content)
 
     def test_repository_template_contains_authorization_boundary(self) -> None:
         template = (REPOSITORY / "templates" / "AGENTS.project.md").read_text(encoding="utf-8")

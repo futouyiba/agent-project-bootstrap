@@ -64,6 +64,10 @@
 
 存量项目不应在迁移第一天就启用可写的事件驱动 Agent Action，也不应同时运行多个覆盖同一范围的定时主管。
 
+## 第八阶段（可选）：事件驱动 agent
+
+如果稳定运行后仍需要 GitHub 自动唤醒实现、审查和合并就绪检查，先安装 `gh-aw` staged profile。只选 1–3 个带 `agent:managed` 的真实事项试跑；确认未管理事项完全不动作、路由无重复、费用可控、CI 与 review 能正确回流后，再单独评审是否切换 live。不要让本地托管 supervisor 与 GitHub supervisor 同时负责相同范围。
+
 ## 回滚
 
 如果试点不合适：

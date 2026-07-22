@@ -54,6 +54,23 @@ Bootstrap must replace every placeholder below with an approved value, or write 
 
 When managed mode is enabled, use one durable supervisor for this repository scope. On each heartbeat, refresh GitHub, resume active PRs before new work, address review and CI feedback, and notify the user only at a recorded human gate or after the retry limit. Do not require the user to relay messages between agent conversations.
 
+## GitHub Agentic Workflows (optional)
+
+Bootstrap must replace every placeholder below when the event-driven profile is approved. Keep it `off` otherwise.
+
+- Enabled and rollout: `<off|staged|live>`
+- Engine: `<codex|copilot|claude|gemini|pending>`
+- Pinned `gh-aw` version: `<version-or-pending>`
+- Required engine secret: `<secret-name-or-pending-never-the-value>`
+- Supervisor schedule: `<schedule-or-pending>`
+- Managed routing labels: `<exact-agent-labels-or-none>`
+- Compiled lock files: `<committed|pending-with-reason>`
+- Routine write policy: `<comments-labels-prs-and-same-branch-fixes-only>`
+- Merge capability: `<disabled>`
+- Deployment and publishing: `<never>`
+
+When enabled, GitHub Agentic Workflows may route only items explicitly marked with the repository's managed label. The supervisor, implementer, reviewer, and merge-readiness checker communicate through current Issue/PR state. They may not infer merge, release, deployment, secret, billing, deletion, destructive migration, or scope-change authority. Start in `staged`, inspect proposed outputs and cost, then separately authorize `live` repository writes.
+
 ## Delivery
 
 - Read the Issue, acceptance criteria, and dependencies before changing code.
