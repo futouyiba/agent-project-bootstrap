@@ -28,7 +28,7 @@ Use `pending` with a reason when a capability cannot be configured. Do not claim
 
 Assign each responsibility once:
 
-- **Supervisor Automation**: refresh state, choose the next eligible action, implement, address review comments, repair CI, re-request review, and escalate once.
+- **Supervisor Automation**: refresh state, choose the next eligible action, implement, address review comments, repair CI, re-request review, and escalate once. This may be a local Codex heartbeat or an explicitly configured GitHub Agentic Workflows supervisor, but never both for the same scope.
 - **GitHub Issues and PRs**: hold scope, dependencies, decisions, review threads, and evidence.
 - **GitHub Project workflows**: perform deterministic intake and status transitions.
 - **CI / required checks**: provide repeatable validation gates.
@@ -88,4 +88,4 @@ This policy never implies deployment or publishing.
 
 When the Codex client exposes Automations, use [the managed supervisor prompt](../assets/codex-managed-supervisor.md) as the instruction body and attach it to the supervisor task. Ask once for the cadence if repository policy does not define it. Prefer 15–30 minutes for active delivery and a slower schedule for maintenance.
 
-Scheduled heartbeats are not GitHub webhooks. If true event-driven execution is required, document `openai/codex-action` as an advanced option and require a separate security review before adding an API key or write permissions. Validate trusted actors, untrusted PR content, prompt-injection exposure, workflow permissions, and cost limits. Do not enable write-capable event automation by default.
+Scheduled heartbeats are not GitHub webhooks. Local heartbeats may also require the desktop client to remain available. If true event-driven execution is required, read [GitHub Agentic Workflows](github-agentic-workflows.md) and offer its staged profile. It compiles Markdown agent workflows into GitHub Actions and can use Codex or another supported engine. Require a separate security review before adding an API key or live safe outputs. Validate trusted actors, untrusted PR content, prompt-injection exposure, workflow permissions, generated lock files, concurrency, and cost limits. Do not enable write-capable event automation by default.
