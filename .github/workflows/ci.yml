@@ -65,3 +65,28 @@ jobs:
           } catch {
             if ((Get-Content -Raw $brokenPath) -ne $brokenOriginal) { exit 1 }
           }
+
+          $startMarker = '<!-- agent-project-bootstrap:start -->'
+          $endMarker = '<!-- agent-project-bootstrap:end -->'
+          $inlineCases = @(
+            "before $startMarker`nold rule`n$endMarker`nafter`n",
+            "before`n$startMarker`nold rule`n$endMarker after`n",
+            "before $startMarker`nold rule`n$endMarker after`n"
+          )
+          for ($index = 0; $index -lt $inlineCases.Count; $index++) {
+            $inlineHome = "$env:RUNNER_TEMP/inline-home-$index"
+            New-Item -ItemType Directory -Force -Path $inlineHome | Out-Null
+            $inlinePath = Join-Path $inlineHome "AGENTS.md"
+            $inlineOriginal = $inlineCases[$index]
+            Set-Content -Path $inlinePath -Value $inlineOriginal -NoNewline
+            $installerFailed = $false
+            try {
+              ./install.ps1 -Source . -CodexHome $inlineHome -WithGlobalRule
+            } catch {
+              $installerFailed = $true
+            }
+            if (-not $installerFailed) { throw "Expected inline marker case $index to fail" }
+            if ((Get-Content -Raw $inlinePath) -ne $inlineOriginal) {
+              throw "Inline marker case $index modified AGENTS.md"
+            }
+          }

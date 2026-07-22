@@ -104,6 +104,12 @@ try {
         $StartCount = [regex]::Matches($Existing, [regex]::Escape($StartMarker)).Count
         $EndCount = [regex]::Matches($Existing, [regex]::Escape($EndMarker)).Count
         if ($StartCount -eq 1 -and $EndCount -eq 1 -and $Existing.IndexOf($StartMarker) -lt $Existing.IndexOf($EndMarker)) {
+            $StandaloneStartPattern = '(?m)^[\t ]*' + [regex]::Escape($StartMarker) + '[\t ]*\r?$'
+            $StandaloneEndPattern = '(?m)^[\t ]*' + [regex]::Escape($EndMarker) + '[\t ]*\r?$'
+            if (-not [regex]::IsMatch($Existing, $StandaloneStartPattern) -or
+                -not [regex]::IsMatch($Existing, $StandaloneEndPattern)) {
+                throw "Refusing to update $AgentsFile because managed block markers must be on their own lines."
+            }
             $Pattern = '(?s)<!-- agent-project-bootstrap:start -->.*?<!-- agent-project-bootstrap:end -->'
             $WithoutOldRule = [regex]::Replace($Existing, $Pattern, "").TrimEnd()
         } elseif ($StartCount -eq 0 -and $EndCount -eq 0) {
