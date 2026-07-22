@@ -218,6 +218,39 @@ class PosixInstallerTests(unittest.TestCase):
                     self.assertIn("markers are incomplete or duplicated", result.stderr)
                     self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
 
+    def test_markers_sharing_lines_with_user_text_fail_without_losing_content(self) -> None:
+        start = "<!-- agent-project-bootstrap:start -->"
+        end = "<!-- agent-project-bootstrap:end -->"
+        originals = (
+            f"before {start}\nold rule\n{end}\nafter\n",
+            f"before\n{start}\nold rule\n{end} after\n",
+            f"before {start}\nold rule\n{end} after\n",
+        )
+        for original in originals:
+            with self.subTest(original=original):
+                with tempfile.TemporaryDirectory() as directory:
+                    codex_root = Path(directory) / "codex"
+                    codex_root.mkdir(parents=True)
+                    agents_file = codex_root / "AGENTS.md"
+                    agents_file.write_text(original, encoding="utf-8")
+
+                    result = run(
+                        [
+                            "sh",
+                            str(REPOSITORY / "install.sh"),
+                            "--source",
+                            str(REPOSITORY),
+                            "--codex-home",
+                            str(codex_root),
+                            "--with-global-rule",
+                        ],
+                        REPOSITORY,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("markers must be on their own lines", result.stderr)
+                    self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
 
 class SkillContractTests(unittest.TestCase):
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:

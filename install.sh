@@ -103,6 +103,12 @@ if [ "$with_global_rule" -eq 1 ]; then
   start_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:start -->/, "&") } END { print count + 0 }' "$agents_file")"
   end_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:end -->/, "&") } END { print count + 0 }' "$agents_file")"
   if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
+    if ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:start -->[[:space:]]*$' "$agents_file" ||
+      ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:end -->[[:space:]]*$' "$agents_file"; then
+      rm -f "$agents_temp"
+      printf 'Refusing to update %s: managed block markers must be on their own lines.\n' "$agents_file" >&2
+      exit 1
+    fi
     start_line="$(grep -n '<!-- agent-project-bootstrap:start -->' "$agents_file" | cut -d: -f1)"
     end_line="$(grep -n '<!-- agent-project-bootstrap:end -->' "$agents_file" | cut -d: -f1)"
     if [ "$start_line" -ge "$end_line" ]; then
