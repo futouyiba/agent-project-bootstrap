@@ -181,6 +181,43 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("markers are out of order", result.stderr)
             self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
 
+    def test_same_line_duplicate_markers_fail_without_losing_user_content(self) -> None:
+        marker_pairs = (
+            (
+                "<!-- agent-project-bootstrap:start -->" * 2,
+                "<!-- agent-project-bootstrap:end -->",
+            ),
+            (
+                "<!-- agent-project-bootstrap:start -->",
+                "<!-- agent-project-bootstrap:end -->" * 2,
+            ),
+        )
+        for start_markers, end_markers in marker_pairs:
+            with self.subTest(start_markers=start_markers, end_markers=end_markers):
+                with tempfile.TemporaryDirectory() as directory:
+                    codex_root = Path(directory) / "codex"
+                    codex_root.mkdir(parents=True)
+                    agents_file = codex_root / "AGENTS.md"
+                    original = f"before\n{start_markers}\nstale rule\n{end_markers}\nafter\n"
+                    agents_file.write_text(original, encoding="utf-8")
+
+                    result = run(
+                        [
+                            "sh",
+                            str(REPOSITORY / "install.sh"),
+                            "--source",
+                            str(REPOSITORY),
+                            "--codex-home",
+                            str(codex_root),
+                            "--with-global-rule",
+                        ],
+                        REPOSITORY,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("markers are incomplete or duplicated", result.stderr)
+                    self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
+
 
 class SkillContractTests(unittest.TestCase):
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:

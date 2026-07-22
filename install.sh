@@ -100,8 +100,8 @@ if [ "$with_global_rule" -eq 1 ]; then
   mkdir -p "$codex_root"
   touch "$agents_file"
   agents_temp="$(mktemp)"
-  start_count="$(grep -c '<!-- agent-project-bootstrap:start -->' "$agents_file" || true)"
-  end_count="$(grep -c '<!-- agent-project-bootstrap:end -->' "$agents_file" || true)"
+  start_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:start -->/, "&") } END { print count + 0 }' "$agents_file")"
+  end_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:end -->/, "&") } END { print count + 0 }' "$agents_file")"
   if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
     start_line="$(grep -n '<!-- agent-project-bootstrap:start -->' "$agents_file" | cut -d: -f1)"
     end_line="$(grep -n '<!-- agent-project-bootstrap:end -->' "$agents_file" | cut -d: -f1)"
