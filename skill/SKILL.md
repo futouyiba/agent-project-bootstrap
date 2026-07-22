@@ -1,6 +1,6 @@
 ---
 name: agent-project-bootstrap
-description: Initialize or migrate a Git repository for coordinated agent development, operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow, and configure a bounded managed supervisor that continues routine handoffs without user relaying. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, 收尾, 合并收尾, or 托管这个项目.
+description: Initialize or migrate a Git repository for coordinated agent development, operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow, and configure a bounded managed supervisor that continues routine handoffs without user relaying. Use when starting or standardizing a project, when the user describes work without an Issue number, or says 记一下, 收需求, 开始做, 收尾, 合并收尾, or 托管.
 ---
 
 # Agent Project Workflow
@@ -89,7 +89,7 @@ Never require the user to supply an Issue number.
 - **开始做 + natural-language description** — resolve the matching Issue, move it to `In progress`, create a branch, implement, validate, and open a linked PR when authorized.
 - **收尾** — inspect the linked Issue, PR, review, and CI; record evidence and move to the appropriate status, but ask before merge, deployment, deletion, or other gated actions.
 - **合并收尾 + optional scope** — treat the user's invocation as merge authorization for this turn only. Read the integration procedure in [daily project flow](references/daily-project-flow.md), merge only qualifying PRs in the current repository, and never deploy or publish.
-- **托管这个项目 + goal or scope** — configure or resume the bounded supervisor in [managed autopilot](references/managed-autopilot.md). Ask once for any missing standing merge policy or automation schedule, then stop requiring the user to relay routine Issue, PR, review, and CI updates.
+- **托管 + optional goal or scope** — configure or resume the bounded supervisor in [managed autopilot](references/managed-autopilot.md). With no suffix, use the current repository and current explicit goal, active Issue, or active PR. If that scope is ambiguous, ask one concise question. Consolidate any missing schedule and standing merge-policy choices into one setup confirmation, then stop requiring the user to relay routine Issue, PR, review, and CI updates. Treat `托管这个项目` and natural equivalents identically.
 
 ## Managed mode
 

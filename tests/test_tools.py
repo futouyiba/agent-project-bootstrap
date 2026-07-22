@@ -127,7 +127,8 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertNotIn("OUTDATED RULE", agents)
             self.assertIn("never require the user to know an Issue number", agents)
             self.assertIn("合并收尾", agents)
-            self.assertIn("托管这个项目", agents)
+            self.assertIn("and `托管` as shortcuts", agents)
+            self.assertIn("Bare `托管` means the current repository", agents)
             self.assertIn("one durable supervisor", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
 
@@ -263,7 +264,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("bootstrap mode first", skill)
         self.assertIn("Preserve the pending task description", skill)
         self.assertIn("Never require the user to supply an Issue number", skill)
-        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾", "托管这个项目"):
+        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾", "托管"):
             self.assertIn(shortcut, skill)
 
         daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
@@ -286,6 +287,8 @@ class SkillContractTests(unittest.TestCase):
         )
 
         self.assertIn("## Managed mode", skill)
+        self.assertIn("With no suffix, use the current repository", skill)
+        self.assertIn("Treat `托管这个项目` and natural equivalents identically", skill)
         self.assertIn("Do not depend on the user copying messages", skill)
         self.assertIn("retry limit", managed)
         self.assertIn("Default human gates", managed)
