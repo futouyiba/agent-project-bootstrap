@@ -14,10 +14,22 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 AUDIT = REPOSITORY / "skill" / "scripts" / "audit_project.py"
 SNAPSHOT = REPOSITORY / "skill" / "scripts" / "snapshot_github.py"
 AGENTIC = REPOSITORY / "skill" / "scripts" / "configure_agentic_workflows.py"
+GITHUB_PROJECT = "https://github.com/orgs/example/projects/1"
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, check=False, capture_output=True, text=True)
+
+
+def agentic_command(root: Path, *arguments: str) -> list[str]:
+    return [
+        sys.executable,
+        str(AGENTIC),
+        str(root),
+        "--github-project",
+        GITHUB_PROJECT,
+        *arguments,
+    ]
 
 
 class AuditTests(unittest.TestCase):
@@ -89,12 +101,14 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
-            result = run([sys.executable, str(AGENTIC), str(root)], root)
+            result = run(agentic_command(root), root)
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(result.stdout)
             self.assertEqual(report["engine"], "codex")
             self.assertEqual(report["rollout"], "staged")
             self.assertEqual(report["required_secret"], "OPENAI_API_KEY")
+            self.assertEqual(report["project_write_secret"], "GH_AW_WRITE_PROJECT_TOKEN")
+            self.assertEqual(report["github_project"], GITHUB_PROJECT)
             self.assertTrue(all(item["action"] == "create" for item in report["files"]))
             self.assertFalse((root / ".github").exists())
 
@@ -102,14 +116,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
-            command = [
-                sys.executable,
-                str(AGENTIC),
-                str(root),
-                "--engine",
-                "codex",
-                "--apply",
-            ]
+            command = agentic_command(root, "--engine", "codex", "--apply")
             first = run(command, root)
             self.assertEqual(first.returncode, 0, first.stderr)
             workflows = sorted((root / ".github" / "workflows").glob("agent-*.md"))
@@ -122,18 +129,45 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 self.assertNotIn("__STAGED__", content)
                 self.assertNotIn("__CI_BRANCH_PATTERN__", content)
                 self.assertNotIn("__CI_WORKFLOW__", content)
+                self.assertNotIn("__GITHUB_PROJECT__", content)
+            supervisor = (workflows[0].parent / "agent-supervisor.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(f"project: {json.dumps(GITHUB_PROJECT)}", supervisor)
 
             second = run(command, root)
             self.assertEqual(second.returncode, 0, second.stderr)
             report = json.loads(second.stdout)
             self.assertTrue(all(item["action"] == "unchanged" for item in report["files"]))
 
+    def test_project_url_is_required_and_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+
+            missing = run([sys.executable, str(AGENTIC), str(root)], root)
+            invalid = run(
+                [
+                    sys.executable,
+                    str(AGENTIC),
+                    str(root),
+                    "--github-project",
+                    "https://github.com/example/not-a-project",
+                ],
+                root,
+            )
+
+            self.assertEqual(missing.returncode, 2)
+            self.assertIn("--github-project", missing.stderr)
+            self.assertEqual(invalid.returncode, 2)
+            self.assertIn("GitHub Projects v2 URL", invalid.stderr)
+
     def test_first_install_cannot_enable_live_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
 
-            result = run([sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root)
+            result = run(agentic_command(root, "--live", "--apply"), root)
 
             self.assertEqual(result.returncode, 5)
             report = json.loads(result.stdout)
@@ -147,10 +181,10 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
-            staged = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+            staged = run(agentic_command(root, "--apply"), root)
             self.assertEqual(staged.returncode, 0, staged.stderr)
 
-            preview = run([sys.executable, str(AGENTIC), str(root), "--live"], root)
+            preview = run(agentic_command(root, "--live"), root)
             self.assertEqual(preview.returncode, 0, preview.stderr)
             self.assertTrue(
                 all(
@@ -160,7 +194,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             )
 
             promoted = run(
-                [sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root
+                agentic_command(root, "--live", "--apply"), root
             )
             self.assertEqual(promoted.returncode, 0, promoted.stderr)
             for workflow in (root / ".github" / "workflows").glob("agent-*.md"):
@@ -171,7 +205,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
             self.assertEqual(
-                run([sys.executable, str(AGENTIC), str(root), "--apply"], root).returncode,
+                run(agentic_command(root, "--apply"), root).returncode,
                 0,
             )
             workflows = root / ".github" / "workflows"
@@ -181,7 +215,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             )
 
             result = run(
-                [sys.executable, str(AGENTIC), str(root), "--live", "--apply"], root
+                agentic_command(root, "--live", "--apply"), root
             )
 
             self.assertEqual(result.returncode, 3)
@@ -204,7 +238,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"symbolic links unavailable: {error}")
 
-            result = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+            result = run(agentic_command(root, "--apply"), root)
 
             self.assertEqual(result.returncode, 6)
             self.assertEqual(json.loads(result.stdout)["reason"], "unsafe_destination")
@@ -219,7 +253,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             conflict = workflows / "agent-review.md"
             conflict.write_text("user-owned\n", encoding="utf-8")
 
-            result = run([sys.executable, str(AGENTIC), str(root), "--apply"], root)
+            result = run(agentic_command(root, "--apply"), root)
             self.assertEqual(result.returncode, 3)
             self.assertEqual(conflict.read_text(encoding="utf-8"), "user-owned\n")
             self.assertFalse((workflows / "agent-supervisor.md").exists())
@@ -527,9 +561,13 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Completed implementation must be non-draft before independent review", supervisor)
         self.assertIn("Never dispatch an approver-only role", supervisor)
         self.assertIn("repository-approved\n  current-head review signal", supervisor)
+        self.assertIn("mark-pull-request-as-ready-for-review", supervisor)
+        self.assertIn("update-project", supervisor)
+        self.assertIn("GH_AW_WRITE_PROJECT_TOKEN", supervisor)
+        self.assertIn("linked Issue's\n`Status` field to `In review`", supervisor)
         self.assertIn("AGENT-CYCLE:", implementer)
         self.assertIn("needs:human", supervisor)
-        self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 3)
+        self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 4)
         self.assertIn("github.event.workflow_run.event == 'pull_request'", supervisor)
         self.assertIn("branches: [__CI_BRANCH_PATTERN__]", supervisor)
         self.assertIn("create-pull-request", implementer)
@@ -544,6 +582,14 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertEqual(implementer.count("required-labels: [agent:managed]"), 4)
         self.assertIn("submit-pull-request-review", reviewer)
+        self.assertIn("allowed-events: [COMMENT]", reviewer)
+        self.assertNotIn("allowed-events: [COMMENT, REQUEST_CHANGES]", reviewer)
+        self.assertIn("Never submit\n`REQUEST_CHANGES`", reviewer)
+        self.assertIn(
+            "whether\nthe PR was authored by a human or by the same workflow identity",
+            reviewer,
+        )
+        self.assertIn("managed label is the repository's author-agnostic blocking", reviewer)
         self.assertIn("repository-approved review signal", reviewer)
         self.assertIn("do not dispatch another approver-only Agent", reviewer)
         self.assertIn("Recheck managed pull request before writes", reviewer)

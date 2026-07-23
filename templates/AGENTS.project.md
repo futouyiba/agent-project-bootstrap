@@ -73,6 +73,7 @@ Bootstrap must replace every placeholder below when the event-driven profile is 
 - Engine: `<codex|copilot|claude|gemini|pending>`
 - Pinned `gh-aw` version: `<version-or-pending>`
 - Required engine secret: `<secret-name-or-pending-never-the-value>`
+- Required Project-write secret: `<secret-name-or-pending-never-the-value>`
 - Supervisor schedule: `<schedule-or-pending>`
 - Managed routing labels: `<exact-agent-labels-or-none>`
 - Compiled lock files: `<committed|pending-with-reason>`
@@ -80,7 +81,7 @@ Bootstrap must replace every placeholder below when the event-driven profile is 
 - Merge capability: `<disabled>`
 - Deployment and publishing: `<never>`
 
-When enabled, GitHub Agentic Workflows may route only items explicitly marked with the repository's managed label. The supervisor, implementer, reviewer, and merge-readiness checker communicate through current Issue/PR state. They may not infer merge, release, deployment, secret, billing, deletion, destructive migration, or scope-change authority. Start in `staged`, inspect proposed outputs and cost, then separately authorize `live` repository writes.
+When enabled, GitHub Agentic Workflows may route only items explicitly marked with the repository's managed label. The supervisor may mark a completed managed PR ready and use the separately authenticated Project safe output only to move its linked Issue to `In review`; it must not add the PR as a second Project item. The supervisor, implementer, reviewer, and merge-readiness checker communicate through current Issue/PR state. They may not infer merge, release, deployment, secret, billing, deletion, destructive migration, or scope-change authority. Start in `staged`, inspect proposed outputs and cost, then separately authorize `live` repository writes.
 
 ## Delivery
 

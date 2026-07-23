@@ -32,18 +32,25 @@ Before proposing installation:
 2. Verify the repository has stable Issue/PR conventions and validation commands.
 3. Check for an existing `gh-aw` setup, `.github/aw/actions-lock.json`, or
    `.github/workflows/*.lock.yml`. Preserve existing conventions.
-4. Choose one supported engine. For `codex`, record the secret name
+4. Record the exact GitHub Projects v2 URL whose linked Issue status the
+   supervisor may update.
+5. Choose one supported engine. For `codex`, record the secret name
    `OPENAI_API_KEY`; never read or print its value. ChatGPT subscriptions do not
    supply this API credential.
-5. Pin a non-retired `gh-aw` release and review its release/security notes. The
+6. Record `GH_AW_WRITE_PROJECT_TOKEN` as a separate least-privilege PAT or
+   GitHub App token with Projects write access. The default `GITHUB_TOKEN`
+   cannot update Projects v2. Never read or print the token value.
+7. Pin a non-retired `gh-aw` release and review its release/security notes. The
    bundled templates are currently compile-tested with `v0.82.14`; treat that as
    a tested pin, not permission to skip newer security advisories.
-6. Record a budget, timeout, concurrency policy, managed label set, and human gates.
+8. Record a budget, timeout, concurrency policy, managed label set, and human gates.
 
 Run the helper without `--apply` to get a non-writing plan:
 
 ```sh
-python3 scripts/configure_agentic_workflows.py /path/to/repository --engine codex
+python3 scripts/configure_agentic_workflows.py /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1
 ```
 
 ## Safe rollout
@@ -51,7 +58,10 @@ python3 scripts/configure_agentic_workflows.py /path/to/repository --engine code
 First install in preview mode:
 
 ```sh
-python3 scripts/configure_agentic_workflows.py /path/to/repository --engine codex --apply
+python3 scripts/configure_agentic_workflows.py /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1 \
+  --apply
 gh aw compile --strict
 ```
 
@@ -91,6 +101,10 @@ generated diff.
   Make the consolidated safe-output job depend on the second check. Restrict
   worker mutations to their exact input item and use handler-level label filters
   wherever the pinned compiler preserves them.
+- Let the supervisor mark only managed PRs ready for review. Restrict Project
+  writes to the configured Project and the linked Issue's `Status: In review`
+  transition, using the dedicated Project token; never add PRs as duplicate
+  Project items.
 - Reject symbolic links in the workflow destination before planning or writing.
 - Keep generated lock files committed and Actions pinned by the compiler.
 - Limit dispatch fan-out, AI credits, timeouts, per-item concurrency, and retry

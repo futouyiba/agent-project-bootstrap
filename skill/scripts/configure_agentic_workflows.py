@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,9 @@ WORKFLOW_NAMES = (
 )
 SUPPORTED_ENGINES = ("codex", "copilot", "claude", "gemini")
 TESTED_GH_AW_VERSION = "v0.82.14"
+PROJECT_URL_PATTERN = re.compile(
+    r"https://github\.com/(?:users|orgs)/[^/]+/projects/[1-9][0-9]*"
+)
 
 
 def git_root(path: Path) -> Path | None:
@@ -95,17 +99,41 @@ def atomic_write(target: Path, content: str) -> None:
             temporary.unlink()
 
 
-def render(source: Path, engine: str, staged: bool, ci_branch_pattern: str, ci_workflow: str) -> str:
+def github_project_url(value: str) -> str:
+    if PROJECT_URL_PATTERN.fullmatch(value) is None:
+        raise argparse.ArgumentTypeError(
+            "expected a GitHub Projects v2 URL such as "
+            "https://github.com/orgs/example/projects/1"
+        )
+    return value
+
+
+def render(
+    source: Path,
+    engine: str,
+    staged: bool,
+    ci_branch_pattern: str,
+    ci_workflow: str,
+    github_project: str,
+) -> str:
     return (
         source.read_text(encoding="utf-8")
         .replace("__ENGINE__", engine)
         .replace("__STAGED__", "true" if staged else "false")
         .replace("__CI_BRANCH_PATTERN__", json.dumps(ci_branch_pattern))
         .replace("__CI_WORKFLOW__", json.dumps(ci_workflow))
+        .replace("__GITHUB_PROJECT__", json.dumps(github_project))
     )
 
 
-def plan(repository: Path, engine: str, staged: bool, ci_branch_pattern: str, ci_workflow: str) -> dict[str, object]:
+def plan(
+    repository: Path,
+    engine: str,
+    staged: bool,
+    ci_branch_pattern: str,
+    ci_workflow: str,
+    github_project: str,
+) -> dict[str, object]:
     assets = Path(__file__).resolve().parents[1] / "assets" / "github-agentic-workflows"
     destination = validate_destination(repository)
     files: list[dict[str, str]] = []
@@ -115,8 +143,22 @@ def plan(repository: Path, engine: str, staged: bool, ci_branch_pattern: str, ci
     for name in WORKFLOW_NAMES:
         source = assets / name
         target = destination / name
-        content = render(source, engine, staged, ci_branch_pattern, ci_workflow)
-        staged_content = render(source, engine, True, ci_branch_pattern, ci_workflow)
+        content = render(
+            source,
+            engine,
+            staged,
+            ci_branch_pattern,
+            ci_workflow,
+            github_project,
+        )
+        staged_content = render(
+            source,
+            engine,
+            True,
+            ci_branch_pattern,
+            ci_workflow,
+            github_project,
+        )
         if not target.exists():
             if staged:
                 action = "create"
@@ -138,13 +180,16 @@ def plan(repository: Path, engine: str, staged: bool, ci_branch_pattern: str, ci
         "rollout": "staged" if staged else "live",
         "ci_branch_pattern": ci_branch_pattern,
         "ci_workflow": ci_workflow,
+        "github_project": github_project,
         "tested_gh_aw_version": TESTED_GH_AW_VERSION,
         "files": files,
         "conflicts": conflicts,
         "blocked": blocked,
         "required_secret": "OPENAI_API_KEY" if engine == "codex" else "engine-specific",
+        "project_write_secret": "GH_AW_WRITE_PROJECT_TOKEN",
         "next_steps": [
             "record the approved policy in AGENTS.md and .codex/agent-project-bootstrap.yml",
+            "configure the documented least-privilege Project write token",
             "create the documented agent:* repository labels",
             "compile and commit generated lock files with gh aw compile --strict",
             "run staged trials before changing rollout to live",
@@ -158,6 +203,12 @@ def main() -> int:
     )
     parser.add_argument("repository", nargs="?", default=".")
     parser.add_argument("--engine", choices=SUPPORTED_ENGINES, default="codex")
+    parser.add_argument(
+        "--github-project",
+        required=True,
+        type=github_project_url,
+        help="Exact GitHub Projects v2 URL whose Issue status the supervisor may update.",
+    )
     parser.add_argument(
         "--ci-branch-pattern",
         default="**",
@@ -179,7 +230,14 @@ def main() -> int:
         return 2
 
     try:
-        report = plan(root, args.engine, not args.live, args.ci_branch_pattern, args.ci_workflow)
+        report = plan(
+            root,
+            args.engine,
+            not args.live,
+            args.ci_branch_pattern,
+            args.ci_workflow,
+            args.github_project,
+        )
     except UnsafeDestinationError as error:
         print(json.dumps({"reason": "unsafe_destination", "detail": str(error)}, ensure_ascii=False, indent=2))
         return 6
@@ -211,6 +269,7 @@ def main() -> int:
                             not args.live,
                             args.ci_branch_pattern,
                             args.ci_workflow,
+                            args.github_project,
                         ),
                     )
         except UnsafeDestinationError as error:
@@ -226,7 +285,14 @@ def main() -> int:
             compiled = subprocess.run(["gh", "aw", "compile", "--strict"], cwd=root, check=False)
             if compiled.returncode != 0:
                 return compiled.returncode
-        report = plan(root, args.engine, not args.live, args.ci_branch_pattern, args.ci_workflow)
+        report = plan(
+            root,
+            args.engine,
+            not args.live,
+            args.ci_branch_pattern,
+            args.ci_workflow,
+            args.github_project,
+        )
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0

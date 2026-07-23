@@ -26,6 +26,7 @@ github_agentic_workflows:
   source_files: []
   compiled_lock_files: []
   required_secret: null
+  project_write_secret: null
   routing_labels: []
   supervisor_schedule: null
   merge_capability: disabled

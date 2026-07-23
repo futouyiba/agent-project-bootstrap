@@ -120,8 +120,8 @@ Read [managed autopilot](references/managed-autopilot.md) completely before enab
 
 When the repository explicitly adopts GitHub Agentic Workflows:
 
-1. Run `python3 scripts/configure_agentic_workflows.py [repository]` for a read-only plan.
-2. Show the exact workflow source files, engine secret name, routing labels, schedule, cost limits, and rollout state.
+1. Run `python3 scripts/configure_agentic_workflows.py [repository] --github-project [exact-project-url]` for a read-only plan.
+2. Show the exact workflow source files, engine and Project-write secret names, routing labels, schedule, cost limits, and rollout state.
 3. Start with `--apply` in staged mode. The configurator rejects a first-time `--live --apply`; later promotion is allowed only when all generated files still exactly match its staged profile.
 4. Compile with a pinned supported `gh-aw` release using `gh aw compile --strict`; commit both Markdown sources and generated lock files.
 5. Verify staged runs on representative Issue, PR, review, and CI events before proposing live safe outputs.

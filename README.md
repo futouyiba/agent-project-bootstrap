@@ -180,20 +180,27 @@ GitHub 事件/30 分钟兜底心跳
 它不是安装全局 Skill 后自动开启的。每个仓库都要先做只读计划：
 
 ```sh
-python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py \
+  /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1
 ```
 
 确认后只安装预演版：
 
 ```sh
-python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex --apply
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py \
+  /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1 \
+  --apply
 gh aw compile --strict
 ```
 
 Windows PowerShell 对应使用：
 
 ```powershell
-python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py" C:\path\to\repository --engine codex --apply
+python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py" C:\path\to\repository --engine codex --github-project https://github.com/orgs/example/projects/1 --apply
 gh aw compile --strict
 ```
 
@@ -203,7 +210,7 @@ gh aw compile --strict
 
 安装器还会拒绝 `.github`、`.github/workflows` 或目标 workflow 文件中的符号链接，防止仓库内路径把写入重定向到仓库外部。
 
-Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
+Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。主管把完成的 Draft PR 转为 Ready，并把关联 Issue 的 Project Status 更新为 `In review`，因此还要配置独立的 `GH_AW_WRITE_PROJECT_TOKEN`：使用只覆盖目标 Project 和仓库的最小权限 PAT 或 GitHub App token，默认 `GITHUB_TOKEN` 无法写入 Projects v2。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
 
 Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation job 查询精确的 Issue/PR 编号、类型和 `agent:managed` 标签；AI 结束后、任何 safe output 写入前还会再次检查。所有 worker 写入固定到传入编号，支持标签门禁的 handler 同时配置 `required-labels: [agent:managed]`。因此仓库正文或评论中的 prompt injection 不能自行把未托管事项加入执行范围。
 

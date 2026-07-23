@@ -60,6 +60,14 @@ safe-outputs:
     target: "*"
     required-labels: [agent:managed]
     max: 3
+  mark-pull-request-as-ready-for-review:
+    target: "*"
+    required-labels: [agent:managed]
+    max: 3
+  update-project:
+    project: __GITHUB_PROJECT__
+    github-token: ${{ secrets.GH_AW_WRITE_PROJECT_TOKEN }}
+    max: 3
 ---
 
 # Bounded repository supervisor
@@ -91,6 +99,15 @@ wait for review or approval to make it ready. The independent reviewer publishes
 the final review signal in the same pass. Never dispatch an approver-only role
 unless repository or platform policy explicitly requires a distinct GitHub
 approval identity.
+
+For completed draft work, use the bounded
+`mark-pull-request-as-ready-for-review` output on the managed PR. Then use
+`update-project` with the configured Project URL to set only the linked Issue's
+`Status` field to `In review`; do not add the PR as a second Project item. If the
+linked Issue, Project item, or exact status value cannot be resolved, do not
+guess or dispatch implementation: add `needs:human` and state the missing
+configuration. Apply the same Project correction when the PR is already
+non-draft but its linked Issue still has an earlier status.
 
 Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 `reason`. Prefer resuming active PRs before selecting new Issues. Do not dispatch

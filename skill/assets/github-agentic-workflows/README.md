@@ -7,10 +7,11 @@ These four source workflows implement a bounded event/schedule-driven handoff:
 3. `agent-review` independently reviews and emits a machine-readable verdict.
 4. `agent-integrate` verifies merge readiness but never merges.
 
-The templates contain engine, rollout, CI-branch-pattern, and CI-workflow
-placeholders. Install them through `scripts/configure_agentic_workflows.py`; do
-not copy them without rendering. Preview (`staged: true`) is the default. The
-current templates are compile-tested with `gh-aw` `v0.82.14`.
+The templates contain engine, rollout, Project URL, CI-branch-pattern, and
+CI-workflow placeholders. Install them through
+`scripts/configure_agentic_workflows.py`; do not copy them without rendering.
+Preview (`staged: true`) is the default. The current templates are
+compile-tested with `gh-aw` `v0.82.14`.
 
 Every worker performs a deterministic pre-activation lookup of its exact input
 number and exits before AI execution unless the item type matches and the item
@@ -19,6 +20,12 @@ safe-output job depends on the second gate. Every worker mutation is restricted
 to that exact number; handlers that support label filters also require
 `agent:managed`. The supervisor may scan multiple items, but its wildcard
 mutations require the same label.
+
+The supervisor uses the dedicated `mark-pull-request-as-ready-for-review`
+output for completed managed Draft PRs and `update-project` only for the linked
+Issue's transition to `In review`. Project writes require the separately
+configured `GH_AW_WRITE_PROJECT_TOKEN`; the default `GITHUB_TOKEN` cannot update
+Projects v2.
 
 Required labels:
 
