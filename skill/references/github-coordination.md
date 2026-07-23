@@ -6,7 +6,7 @@
 - **Project**: cross-issue status, priority, area, size or risk, and roadmap view.
 - **Branch and pull request**: proposed implementation and review conversation.
 - **CI check**: reproducible evidence that the change satisfies automated gates.
-- **AGENTS.md**: stable repository instructions for agents and contributors.
+- **AGENTS.md / CLAUDE.md**: stable repository instructions for agents and contributors (`AGENTS.md` for Codex/ChatGPT, `CLAUDE.md` for Claude Code).
 
 Avoid a second mutable task database in Markdown, JSON, or YAML. A generated read-only summary is fine; two editable sources of truth are not.
 

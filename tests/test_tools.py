@@ -404,6 +404,122 @@ class PosixInstallerTests(unittest.TestCase):
                     self.assertEqual(agents_file.read_text(encoding="utf-8"), original)
 
 
+@unittest.skipIf(os.name == "nt", "POSIX installer test")
+class ClaudeInstallerTests(unittest.TestCase):
+    def _install(self, claude_root: Path) -> subprocess.CompletedProcess[str]:
+        return run(
+            [
+                "sh",
+                str(REPOSITORY / "install.sh"),
+                "--source",
+                str(REPOSITORY),
+                "--target",
+                "claude",
+                "--claude-home",
+                str(claude_root),
+                "--with-global-rule",
+            ],
+            REPOSITORY,
+        )
+
+    def test_claude_install_uses_commands_and_claude_md(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            claude_root = Path(directory) / "claude"
+
+            first = self._install(claude_root)
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            destination = claude_root / "skills" / "agent-project-bootstrap"
+            self.assertTrue((destination / "SKILL.md").exists())
+            self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
+            self.assertTrue(
+                (destination / "assets" / "github-agentic-workflows" / "agent-supervisor.md").exists()
+            )
+
+            # Claude target installs a slash command, not a Codex prompt.
+            integrate_command = claude_root / "commands" / "integrate.md"
+            self.assertTrue(integrate_command.exists())
+            command_text = integrate_command.read_text(encoding="utf-8")
+            self.assertIn("$ARGUMENTS", command_text)
+            self.assertNotIn("$$agent-project-bootstrap", command_text)
+            self.assertIn("Do not deploy, publish", command_text)
+            self.assertFalse((claude_root / "prompts").exists())
+
+            rules_file = claude_root / "CLAUDE.md"
+            self.assertTrue(rules_file.exists())
+            rules = rules_file.read_text(encoding="utf-8")
+            self.assertEqual(rules.count("<!-- agent-project-bootstrap:start -->"), 1)
+            self.assertIn("one durable supervisor", rules)
+            self.assertIn("repository `CLAUDE.md`", rules)
+            self.assertIn("`/integrate`", rules)
+            self.assertNotIn("/prompts:integrate", rules)
+
+            # Idempotent re-install upgrades the managed block without duplicating it
+            # and without backing up an identical command file.
+            second = self._install(claude_root)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(
+                rules_file.read_text(encoding="utf-8").count("<!-- agent-project-bootstrap:start -->"),
+                1,
+            )
+            self.assertEqual(
+                len(list((claude_root / "commands").glob("integrate.md.backup.*"))), 0
+            )
+
+    def test_claude_partial_marker_fails_without_losing_user_content(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            claude_root = Path(directory) / "claude"
+            claude_root.mkdir(parents=True)
+            rules_file = claude_root / "CLAUDE.md"
+            original = "before\n<!-- agent-project-bootstrap:start -->\nstale rule\nafter\n"
+            rules_file.write_text(original, encoding="utf-8")
+
+            result = self._install(claude_root)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("markers are incomplete or duplicated", result.stderr)
+            self.assertEqual(rules_file.read_text(encoding="utf-8"), original)
+
+
+@unittest.skipIf(os.name == "nt", "POSIX installer test")
+class PlaceholderLeakTests(unittest.TestCase):
+    """The managed-block placeholder substitution must never touch user content
+    outside the block, and must stay in sync between the codex and claude targets.
+    """
+
+    def test_placeholders_outside_managed_block_are_preserved(self) -> None:
+        cases = [
+            ("codex", "AGENTS.md", ["--codex-home"]),
+            ("claude", "CLAUDE.md", ["--target", "claude", "--claude-home"]),
+        ]
+        for target, rules_name, home_flags in cases:
+            with self.subTest(target=target):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "home"
+                    root.mkdir(parents=True)
+                    rules = root / rules_name
+                    user_line = "keep __INTEGRATE_COMMAND__ and __REPO_RULES_FILE__ verbatim"
+                    rules.write_text("header line\n" + user_line + "\n", encoding="utf-8")
+
+                    cmd = ["sh", str(REPOSITORY / "install.sh"), "--source", str(REPOSITORY)]
+                    cmd += home_flags
+                    cmd += [str(root), "--with-global-rule"]
+                    result = run(cmd, REPOSITORY)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    content = rules.read_text(encoding="utf-8")
+                    # User content outside the managed block is byte-for-byte intact.
+                    self.assertIn("header line", content)
+                    self.assertIn(user_line, content)
+                    # The managed block itself rendered to the target-correct value.
+                    if target == "codex":
+                        self.assertIn("`/prompts:integrate`", content)
+                        self.assertIn("repository `AGENTS.md`", content)
+                    else:
+                        self.assertIn("`/integrate`", content)
+                        self.assertIn("repository `CLAUDE.md`", content)
+
+
 class SkillContractTests(unittest.TestCase):
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
         skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
@@ -506,6 +622,30 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Retry limit: `<integer-default-3>`", template)
         self.assertIn("Merge policy: `<per_turn|qualified_auto_merge|manual>`", template)
         self.assertIn("Deployment and publishing", template)
+
+    def test_claude_project_template_contains_authorization_boundary(self) -> None:
+        template = (REPOSITORY / "templates" / "CLAUDE.project.md").read_text(encoding="utf-8")
+        self.assertIn("## Standing authorization", template)
+        self.assertIn("Project URL: `<project-url-or-pending>`", template)
+        self.assertIn("Validation commands", template)
+        self.assertIn("Ask before", template)
+        self.assertIn("merging", template)
+        self.assertIn("## Managed supervisor", template)
+        self.assertIn("Heartbeat: `<schedule-or-pending>`", template)
+        self.assertIn("Retry limit: `<integer-default-3>`", template)
+        self.assertIn("Merge policy: `<per_turn|qualified_auto_merge|manual>`", template)
+        self.assertIn("Deployment and publishing", template)
+        self.assertIn("`/integrate`", template)
+        self.assertIn("Claude Code", template)
+
+    def test_claude_integrate_command_contract(self) -> None:
+        command = (REPOSITORY / "commands" / "integrate.md").read_text(encoding="utf-8")
+        self.assertIn("description:", command)
+        self.assertIn("argument-hint:", command)
+        self.assertIn("$ARGUMENTS", command)
+        self.assertIn("explicit authorization for this turn", command)
+        self.assertIn("dependenc", command)
+        self.assertIn("Do not deploy, publish", command)
 
 
 if __name__ == "__main__":
