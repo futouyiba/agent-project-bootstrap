@@ -1,0 +1,194 @@
+name: Agent reconcile managed review handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      item_number:
+        description: "Pull request number"
+        required: true
+        type: string
+      item_kind:
+        description: "Must be pull_request"
+        required: true
+        type: choice
+        options:
+          - pull_request
+      reason:
+        description: "Why metadata reconciliation is needed"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+concurrency:
+  group: agent-reconcile-metadata-${{ inputs.item_number }}
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve exact managed PR and closing Issue
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ITEM_KIND: ${{ inputs.item_kind }}
+          PR_NUMBER: ${{ inputs.item_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$ITEM_KIND" = "pull_request"
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*) exit 1 ;;
+          esac
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          jq -e 'any(.labels[]?; .name == "agent:managed")' \
+            <<<"$pr_json" >/dev/null
+
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repository="${GITHUB_REPOSITORY#*/}"
+          links_json="$(
+            gh api graphql \
+              -f query='
+                query($owner: String!, $repository: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repository) {
+                    pullRequest(number: $number) {
+                      closingIssuesReferences(first: 2) {
+                        totalCount
+                        nodes {
+                          number
+                          repository { nameWithOwner }
+                          labels(first: 100) { nodes { name } }
+                        }
+                      }
+                    }
+                  }
+                }' \
+              -f owner="$owner" \
+              -f repository="$repository" \
+              -F number="$PR_NUMBER"
+          )"
+
+          issue_json="$(
+            jq -ce --arg repository "$GITHUB_REPOSITORY" '
+              .data.repository.pullRequest.closingIssuesReferences
+              | if .totalCount == 1 then .nodes
+                else error("expected exactly one closing Issue")
+                end
+              | [
+                .[]
+                | select(.repository.nameWithOwner == $repository)
+                | select(any(.labels.nodes[]?; .name == "agent:managed"))
+              ]
+              | if length == 1 then .[0]
+                else error("expected exactly one managed same-repository closing Issue")
+                end
+            ' <<<"$links_json"
+          )"
+
+          echo "issue_number=$(jq -r '.number' <<<"$issue_json")" >>"$GITHUB_OUTPUT"
+          echo "is_draft=$(jq -r '.draft' <<<"$pr_json")" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve fixed Project item and In review option
+        id: project
+        env:
+          GH_TOKEN: ${{ secrets.GH_AW_WRITE_PROJECT_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.target.outputs.issue_number }}
+          PROJECT_NUMBER: __GITHUB_PROJECT_NUMBER__
+          PROJECT_OWNER: __GITHUB_PROJECT_OWNER__
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          project_json="$(
+            gh project view "$PROJECT_NUMBER" \
+              --owner "$PROJECT_OWNER" \
+              --format json
+          )"
+          test "$(jq -r '.url' <<<"$project_json")" = __GITHUB_PROJECT__
+
+          item_json="$(
+            gh project item-list "$PROJECT_NUMBER" \
+              --owner "$PROJECT_OWNER" \
+              --limit 1000 \
+              --format json
+          )"
+          item="$(
+            jq -ce \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --argjson number "$ISSUE_NUMBER" '
+                [
+                  .items[]
+                  | select(.content.type == "Issue")
+                  | select(.content.repository == $repository)
+                  | select(.content.number == $number)
+                ]
+                | if length == 1 then .[0]
+                  else error("expected exactly one configured Project item for the linked Issue")
+                  end
+              ' <<<"$item_json"
+          )"
+
+          fields_json="$(
+            gh project field-list "$PROJECT_NUMBER" \
+              --owner "$PROJECT_OWNER" \
+              --format json
+          )"
+          status_field="$(
+            jq -ce '
+              [
+                .fields[]
+                | select(.name == "Status")
+                | select(.type == "ProjectV2SingleSelectField")
+              ]
+              | if length == 1 then .[0]
+                else error("expected exactly one single-select Status field")
+                end
+            ' <<<"$fields_json"
+          )"
+          option_id="$(
+            jq -er '
+              [.options[] | select(.name == "In review")]
+              | if length == 1 then .[0].id
+                else error("expected exactly one In review option")
+                end
+            ' <<<"$status_field"
+          )"
+
+          echo "project_id=$(jq -r '.id' <<<"$project_json")" >>"$GITHUB_OUTPUT"
+          echo "item_id=$(jq -r '.id' <<<"$item")" >>"$GITHUB_OUTPUT"
+          echo "field_id=$(jq -r '.id' <<<"$status_field")" >>"$GITHUB_OUTPUT"
+          echo "option_id=$option_id" >>"$GITHUB_OUTPUT"
+          if test "$(jq -r '.status // ""' <<<"$item")" = "In review"; then
+            echo "needs_update=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "needs_update=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Mark managed PR ready for review
+        if: steps.target.outputs.is_draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.item_number }}
+        shell: bash
+        run: gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
+
+      - name: Move linked Issue to In review
+        if: steps.project.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_AW_WRITE_PROJECT_TOKEN }}
+          FIELD_ID: ${{ steps.project.outputs.field_id }}
+          ITEM_ID: ${{ steps.project.outputs.item_id }}
+          OPTION_ID: ${{ steps.project.outputs.option_id }}
+          PROJECT_ID: ${{ steps.project.outputs.project_id }}
+        shell: bash
+        run: |
+          gh project item-edit \
+            --id "$ITEM_ID" \
+            --project-id "$PROJECT_ID" \
+            --field-id "$FIELD_ID" \
+            --single-select-option-id "$OPTION_ID"

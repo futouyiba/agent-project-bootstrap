@@ -1,11 +1,13 @@
 # GitHub Agentic Workflows profile
 
-These four source workflows implement a bounded event/schedule-driven handoff:
+These five source workflows implement a bounded event/schedule-driven handoff:
 
 1. `agent-supervisor` reads GitHub and dispatches one appropriate worker.
-2. `agent-implement` creates a linked PR or repairs an existing managed PR.
-3. `agent-review` independently reviews and emits a machine-readable verdict.
-4. `agent-integrate` verifies merge readiness but never merges.
+2. `agent-reconcile-metadata` is a conventional, non-agent workflow that repairs
+   the Ready/`In review` handoff for one exact managed PR and linked Issue.
+3. `agent-implement` creates a linked PR or repairs an existing managed PR.
+4. `agent-review` independently reviews and emits a machine-readable verdict.
+5. `agent-integrate` verifies merge readiness but never merges.
 
 The templates contain engine, rollout, Project URL, CI-branch-pattern, and
 CI-workflow placeholders. Install them through
@@ -21,9 +23,11 @@ to that exact number; handlers that support label filters also require
 `agent:managed`. The supervisor may scan multiple items, but its wildcard
 mutations require the same label.
 
-The supervisor uses the dedicated `mark-pull-request-as-ready-for-review`
-output for completed managed Draft PRs and `update-project` only for the linked
-Issue's transition to `In review`. Project writes require the separately
+The supervisor never receives a Project-write tool or credential. It can only
+dispatch `agent-reconcile-metadata` with a PR number. That workflow
+deterministically resolves the configured Project and exactly one
+same-repository managed closing Issue before marking the PR ready and updating
+the existing Issue item to `In review`. Project writes require the separately
 configured `GH_AW_WRITE_PROJECT_TOKEN`; the default `GITHUB_TOKEN` cannot update
 Projects v2.
 

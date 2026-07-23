@@ -158,19 +158,20 @@ Codex Automation 目前主要是定时心跳，不是 GitHub webhook；本地执
 
 如果目标是不再由人把“实现完成—请审查—还要修改—CI 已通过”粘贴到不同对话，可以为单个仓库启用 [GitHub Agentic Workflows (`gh-aw`)](https://github.com/github/gh-aw) profile。它在 GitHub Actions 中启动独立的无界面 agent run，不会给桌面端任务发送 Steer，也不会打断 ChatGPT/Codex 当前对话。
 
-本项目提供四个角色，但仍然只有一个调度者：
+本项目提供四个 Agent 角色和一个无 AI 的确定性元数据 workflow，但仍然只有一个调度者：
 
 ```text
 GitHub 事件/30 分钟兜底心跳
              ↓
       agent-supervisor
-       ↙      ↓      ↘
- 实现/返工   独立审查   合并就绪核验
-    ↓          ↓           ↓
+    ↙       ↓         ↓          ↘
+元数据修复  实现/返工   独立审查   合并就绪核验
+    ↓       ↓          ↓           ↓
  Issue、PR、Review、CI（共同事实来源）
 ```
 
 - `agent-supervisor`：只路由带 `agent:managed` 的事项；
+- `agent-reconcile-metadata`：不运行 Agent，只为精确 PR 修复 Ready 和关联 Issue 的 `In review` 状态；
 - `agent-implement`：创建 Issue 关联 PR，或在同一 PR 分支修复；
 - `agent-review`：独立审查，留下 `VERDICT: MERGE_READY` 或阻塞意见；
 - `agent-integrate`：重新核对当前 head、CI、依赖和评论，但**不执行合并**。
@@ -206,11 +207,13 @@ gh aw compile --strict
 
 模板目前使用官方 `gh-aw v0.82.14` 做过严格编译验证。首次编译会把新增的 engine secrets 和 Actions 列为 safe-update 安全审查项；逐项检查并在 PR 中记录理由后，再执行 `gh aw compile --strict --approve`。安装脚本不会替你静默批准。CI 完成事件默认匹配所有 PR head 分支，但只接受由 `pull_request` 触发的目标 CI；可以用 `--ci-branch-pattern` 收紧分支 glob，用 `--ci-workflow` 指定准确的 workflow 名称。
 
-第一次生成的 workflow 强制使用 `staged: true`：即使同时传入 `--live --apply`，工具也会拒绝首次安装。它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`；只有四个现有文件与工具生成的 staged 版本逐字一致时，升级才会受控执行，任何人工修改都会作为冲突保留。
+第一次生成的 workflow 强制使用 `staged: true`：即使同时传入 `--live --apply`，工具也会拒绝首次安装。它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`；只有五个现有文件与工具生成的 staged 版本逐字一致时，升级才会受控执行，任何人工修改都会作为冲突保留。
+
+configurator 能识别受支持旧版本生成且未修改的 staged profile。默认模式先只读展示 `migrate_generated`，加 `--apply` 后才原子迁移并补齐新增 workflow；任何被人工编辑的旧文件仍返回冲突。旧 live profile 不会被静默重写，也不能在迁移时同时启用 `--live`，必须先迁移并验证新的 staged profile。
 
 安装器还会拒绝 `.github`、`.github/workflows` 或目标 workflow 文件中的符号链接，防止仓库内路径把写入重定向到仓库外部。
 
-Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。主管把完成的 Draft PR 转为 Ready，并把关联 Issue 的 Project Status 更新为 `In review`，因此还要配置独立的 `GH_AW_WRITE_PROJECT_TOKEN`：使用只覆盖目标 Project 和仓库的最小权限 PAT 或 GitHub App token，默认 `GITHUB_TOKEN` 无法写入 Projects v2。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
+Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。主管本身没有 Project 写工具或凭据；它只能向无 AI 的 `agent-reconcile-metadata` workflow 提交精确 PR 编号。该 workflow 确定性验证 `agent:managed`、唯一的同仓库托管关联 Issue、固定 Project URL、既有 Issue item 和 `In review` 选项后才写入，因此还要配置独立的 `GH_AW_WRITE_PROJECT_TOKEN`：使用只覆盖目标 Project 和仓库的最小权限 PAT 或 GitHub App token，默认 `GITHUB_TOKEN` 无法写入 Projects v2。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
 
 Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation job 查询精确的 Issue/PR 编号、类型和 `agent:managed` 标签；AI 结束后、任何 safe output 写入前还会再次检查。所有 worker 写入固定到传入编号，支持标签门禁的 handler 同时配置 `required-labels: [agent:managed]`。因此仓库正文或评论中的 prompt injection 不能自行把未托管事项加入执行范围。
 

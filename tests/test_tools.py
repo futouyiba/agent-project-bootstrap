@@ -15,6 +15,14 @@ AUDIT = REPOSITORY / "skill" / "scripts" / "audit_project.py"
 SNAPSHOT = REPOSITORY / "skill" / "scripts" / "snapshot_github.py"
 AGENTIC = REPOSITORY / "skill" / "scripts" / "configure_agentic_workflows.py"
 GITHUB_PROJECT = "https://github.com/orgs/example/projects/1"
+AGENTIC_ASSETS = REPOSITORY / "skill" / "assets" / "github-agentic-workflows"
+LEGACY_PROFILE_V1 = REPOSITORY / "tests" / "fixtures" / "legacy-agentic-profile-v1"
+LEGACY_WORKFLOW_NAMES = (
+    "agent-supervisor.md",
+    "agent-implement.md",
+    "agent-review.md",
+    "agent-integrate.md",
+)
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -30,6 +38,22 @@ def agentic_command(root: Path, *arguments: str) -> list[str]:
         GITHUB_PROJECT,
         *arguments,
     ]
+
+
+def install_legacy_staged_profile(root: Path) -> None:
+    workflows = root / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    for name in LEGACY_WORKFLOW_NAMES:
+        fixture = LEGACY_PROFILE_V1 / name
+        source = fixture if fixture.exists() else AGENTIC_ASSETS / name
+        content = (
+            source.read_text(encoding="utf-8")
+            .replace("__ENGINE__", "codex")
+            .replace("__STAGED__", "true")
+            .replace("__CI_BRANCH_PATTERN__", json.dumps("**"))
+            .replace("__CI_WORKFLOW__", json.dumps("CI"))
+        )
+        (workflows / name).write_text(content, encoding="utf-8")
 
 
 class AuditTests(unittest.TestCase):
@@ -112,7 +136,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             self.assertTrue(all(item["action"] == "create" for item in report["files"]))
             self.assertFalse((root / ".github").exists())
 
-    def test_apply_renders_four_workflows_and_is_idempotent(self) -> None:
+    def test_apply_renders_five_workflows_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
@@ -130,10 +154,24 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 self.assertNotIn("__CI_BRANCH_PATTERN__", content)
                 self.assertNotIn("__CI_WORKFLOW__", content)
                 self.assertNotIn("__GITHUB_PROJECT__", content)
-            supervisor = (workflows[0].parent / "agent-supervisor.md").read_text(
+            workflow_directory = workflows[0].parent
+            reconcile = workflow_directory / "agent-reconcile-metadata.yml"
+            self.assertTrue(reconcile.is_file())
+            reconcile_content = reconcile.read_text(encoding="utf-8")
+            for placeholder in (
+                "__GITHUB_PROJECT__",
+                "__GITHUB_PROJECT_OWNER__",
+                "__GITHUB_PROJECT_NUMBER__",
+            ):
+                self.assertNotIn(placeholder, reconcile_content)
+            self.assertIn('PROJECT_OWNER: "example"', reconcile_content)
+            self.assertIn("PROJECT_NUMBER: 1", reconcile_content)
+            self.assertIn(json.dumps(GITHUB_PROJECT), reconcile_content)
+
+            supervisor = (workflow_directory / "agent-supervisor.md").read_text(
                 encoding="utf-8"
             )
-            self.assertIn(f"project: {json.dumps(GITHUB_PROJECT)}", supervisor)
+            self.assertIn("agent-reconcile-metadata", supervisor)
 
             second = run(command, root)
             self.assertEqual(second.returncode, 0, second.stderr)
@@ -162,6 +200,81 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             self.assertEqual(invalid.returncode, 2)
             self.assertIn("GitHub Projects v2 URL", invalid.stderr)
 
+    def test_exact_legacy_staged_profile_migrates_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            workflows = root / ".github" / "workflows"
+            before = {
+                path.name: path.read_text(encoding="utf-8")
+                for path in workflows.iterdir()
+            }
+
+            preview = run(agentic_command(root), root)
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            report = json.loads(preview.stdout)
+            self.assertEqual(report["legacy_profile"], {"version": "v1", "staged": True})
+            actions = {item["path"]: item["action"] for item in report["files"]}
+            self.assertEqual(
+                actions[".github/workflows/agent-supervisor.md"],
+                "migrate_generated",
+            )
+            self.assertEqual(
+                actions[".github/workflows/agent-review.md"],
+                "migrate_generated",
+            )
+            self.assertEqual(
+                actions[".github/workflows/agent-reconcile-metadata.yml"],
+                "create",
+            )
+            self.assertEqual(
+                before,
+                {
+                    path.name: path.read_text(encoding="utf-8")
+                    for path in workflows.iterdir()
+                },
+            )
+
+            applied = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertTrue((workflows / "agent-reconcile-metadata.yml").is_file())
+            final_report = json.loads(applied.stdout)
+            self.assertIsNone(final_report["legacy_profile"])
+            self.assertTrue(
+                all(item["action"] == "unchanged" for item in final_report["files"])
+            )
+
+    def test_modified_legacy_profile_blocks_migration_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            workflows = root / ".github" / "workflows"
+            modified = workflows / "agent-supervisor.md"
+            modified.write_text(
+                modified.read_text(encoding="utf-8") + "\nuser change\n",
+                encoding="utf-8",
+            )
+            before = {
+                path.name: path.read_text(encoding="utf-8")
+                for path in workflows.iterdir()
+            }
+
+            result = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(result.returncode, 3)
+            self.assertEqual(
+                before,
+                {
+                    path.name: path.read_text(encoding="utf-8")
+                    for path in workflows.iterdir()
+                },
+            )
+            self.assertFalse((workflows / "agent-reconcile-metadata.yml").exists())
+
     def test_first_install_cannot_enable_live_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -171,7 +284,7 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 5)
             report = json.loads(result.stdout)
-            self.assertEqual(len(report["blocked"]), 4)
+            self.assertEqual(len(report["blocked"]), 5)
             self.assertTrue(
                 all(item["action"] == "requires_staged_install" for item in report["files"])
             )
@@ -186,10 +299,19 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
 
             preview = run(agentic_command(root, "--live"), root)
             self.assertEqual(preview.returncode, 0, preview.stderr)
+            actions = {
+                item["path"]: item["action"]
+                for item in json.loads(preview.stdout)["files"]
+            }
+            self.assertEqual(
+                actions[".github/workflows/agent-reconcile-metadata.yml"],
+                "unchanged",
+            )
             self.assertTrue(
                 all(
-                    item["action"] == "promote_to_live"
-                    for item in json.loads(preview.stdout)["files"]
+                    action == "promote_to_live"
+                    for path, action in actions.items()
+                    if path.endswith(".md")
                 )
             )
 
@@ -551,6 +673,9 @@ class SkillContractTests(unittest.TestCase):
         implementer = (assets / "agent-implement.md").read_text(encoding="utf-8")
         reviewer = (assets / "agent-review.md").read_text(encoding="utf-8")
         integrator = (assets / "agent-integrate.md").read_text(encoding="utf-8")
+        reconciler = (assets / "agent-reconcile-metadata.yml").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("--apply", reference)
         self.assertIn("staged", reference)
@@ -561,13 +686,13 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Completed implementation must be non-draft before independent review", supervisor)
         self.assertIn("Never dispatch an approver-only role", supervisor)
         self.assertIn("repository-approved\n  current-head review signal", supervisor)
-        self.assertIn("mark-pull-request-as-ready-for-review", supervisor)
-        self.assertIn("update-project", supervisor)
-        self.assertIn("GH_AW_WRITE_PROJECT_TOKEN", supervisor)
-        self.assertIn("linked Issue's\n`Status` field to `In review`", supervisor)
+        self.assertIn("agent-reconcile-metadata", supervisor)
+        self.assertNotIn("update-project:", supervisor)
+        self.assertNotIn("GH_AW_WRITE_PROJECT_TOKEN", supervisor)
+        self.assertIn("cannot accept an Agent-supplied Project URL", supervisor)
         self.assertIn("AGENT-CYCLE:", implementer)
         self.assertIn("needs:human", supervisor)
-        self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 4)
+        self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 3)
         self.assertIn(
             "allowed: [agent:needs-review, agent:needs-rework, needs:human]",
             supervisor,
@@ -604,7 +729,18 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("needs: [managed-target-gate]", integrator)
         self.assertEqual(integrator.count("required-labels: [agent:managed]"), 3)
         self.assertIn("Never call a merge API", integrator)
-        for content in (supervisor, implementer, reviewer, integrator):
+        self.assertIn("closingIssuesReferences(first: 2)", reconciler)
+        self.assertIn("expected exactly one managed same-repository closing Issue", reconciler)
+        self.assertIn("PROJECT_NUMBER: __GITHUB_PROJECT_NUMBER__", reconciler)
+        self.assertIn("PROJECT_OWNER: __GITHUB_PROJECT_OWNER__", reconciler)
+        self.assertIn("GH_AW_WRITE_PROJECT_TOKEN", reconciler)
+        self.assertIn("expected exactly one configured Project item", reconciler)
+        self.assertIn("expected exactly one In review option", reconciler)
+        self.assertIn("gh pr ready", reconciler)
+        self.assertIn("gh project item-edit", reconciler)
+        self.assertNotIn("project_url", reconciler)
+        self.assertNotIn("issue_number:", reconciler)
+        for content in (supervisor, implementer, reviewer, integrator, reconciler):
             self.assertNotIn("merge-pull-request", content)
 
     def test_repository_template_contains_authorization_boundary(self) -> None:

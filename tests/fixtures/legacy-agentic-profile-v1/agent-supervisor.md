@@ -44,19 +44,19 @@ concurrency:
 safe-outputs:
   staged: __STAGED__
   dispatch-workflow:
-    workflows: [agent-implement, agent-review, agent-integrate, agent-reconcile-metadata]
+    workflows: [agent-implement, agent-review, agent-integrate]
     max: 3
   add-comment:
     target: "*"
     required-labels: [agent:managed]
     max: 2
   add-labels:
-    allowed: [agent:needs-review, agent:needs-rework, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
   remove-labels:
-    allowed: [agent:needs-review, agent:needs-rework]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
@@ -74,9 +74,6 @@ or merge.
 
 Choose at most one next role for each item and dispatch no more than three total:
 
-- `agent-reconcile-metadata` for a managed PR whose implementation and scoped
-  validation are complete but which is still Draft or whose linked Issue has
-  not reached `In review`;
 - `agent-implement` for a clear Issue with acceptance criteria and no active PR,
   or for an active managed PR with actionable review/CI feedback;
 - `agent-review` for a managed non-draft PR whose current head needs independent
@@ -94,15 +91,6 @@ wait for review or approval to make it ready. The independent reviewer publishes
 the final review signal in the same pass. Never dispatch an approver-only role
 unless repository or platform policy explicitly requires a distinct GitHub
 approval identity.
-
-For completed draft work or a lagging linked Issue, dispatch
-`agent-reconcile-metadata` with the exact PR number. That non-agent workflow
-independently requires the managed label, exactly one same-repository managed
-closing Issue, the configured Project, an existing Issue item, and the exact
-`Status: In review` option before it writes. It marks the PR ready and updates
-only that resolved Issue item; it cannot accept an Agent-supplied Project URL or
-Issue number. If those deterministic gates fail, do not guess or dispatch
-implementation: add `needs:human` and state the missing configuration.
 
 Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 `reason`. Prefer resuming active PRs before selecting new Issues. Do not dispatch
