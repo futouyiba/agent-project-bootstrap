@@ -253,13 +253,13 @@ def plan(
                 action = "create"
             else:
                 action = "requires_staged_install"
-                blocked.append(str(target.relative_to(repository)))
+                blocked.append(target.relative_to(repository).as_posix())
         elif target.read_text(encoding="utf-8") == content:
             action = "unchanged"
         elif not staged and target.read_text(encoding="utf-8") == staged_content:
             action = "promote_to_live"
         elif legacy_profile and name in LEGACY_WORKFLOW_NAMES:
-            relative = str(target.relative_to(repository))
+            relative = target.relative_to(repository).as_posix()
             if legacy_profile["staged"] and staged:
                 action = "migrate_generated"
             elif legacy_profile["staged"]:
@@ -270,8 +270,10 @@ def plan(
                 blocked.append(relative)
         else:
             action = "conflict"
-            conflicts.append(str(target.relative_to(repository)))
-        files.append({"path": str(target.relative_to(repository)), "action": action})
+            conflicts.append(target.relative_to(repository).as_posix())
+        files.append(
+            {"path": target.relative_to(repository).as_posix(), "action": action}
+        )
 
     return {
         "repository": str(repository),
@@ -358,7 +360,7 @@ def main() -> int:
             actions = {item["path"]: item["action"] for item in report["files"]}
             for name in WORKFLOW_NAMES:
                 target = destination / name
-                relative = str(target.relative_to(root))
+                relative = target.relative_to(root).as_posix()
                 if actions[relative] in {
                     "create",
                     "promote_to_live",
