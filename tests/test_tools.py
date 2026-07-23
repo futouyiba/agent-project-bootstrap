@@ -484,6 +484,32 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 any(manifest_index < index < replace_index for index in github_syncs)
             )
 
+    def test_new_workflow_directories_sync_their_parents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            module = load_agentic_module()
+            synced: list[Path] = []
+            real_fsync_directory = module.fsync_directory
+
+            def record_sync(path: Path) -> None:
+                synced.append(path.resolve())
+                real_fsync_directory(path)
+
+            module.fsync_directory = record_sync
+            try:
+                module.ensure_destination(root)
+            finally:
+                module.fsync_directory = real_fsync_directory
+
+            self.assertEqual(
+                synced,
+                [
+                    root,
+                    (root / ".github").resolve(),
+                ],
+            )
+
     def test_interrupted_migration_is_recovered_before_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
