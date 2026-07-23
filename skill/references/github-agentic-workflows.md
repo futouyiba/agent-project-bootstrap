@@ -105,7 +105,11 @@ new staged profile first.
 
 ## Security and operational rules
 
-- Keep workflow `permissions` read-only; all writes must use typed safe outputs.
+- Keep every agent workflow's `permissions` read-only; its writes must use typed
+  safe outputs. The conventional metadata reconciler may request only
+  `pull-requests: write` in addition to read permissions, and must keep every
+  write behind its deterministic managed-PR, linked-Issue, and fixed-Project
+  gates.
 - Require `agent:managed` in deterministic pre-activation and pre-write checks.
   Make the consolidated safe-output job depend on the second check. Restrict
   worker mutations to their exact input item and use handler-level label filters

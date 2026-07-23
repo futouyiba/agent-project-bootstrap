@@ -275,6 +275,40 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             )
             self.assertFalse((workflows / "agent-reconcile-metadata.yml").exists())
 
+    def test_legacy_staged_profile_must_migrate_before_live_promotion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            workflows = root / ".github" / "workflows"
+            before = {
+                path.name: path.read_text(encoding="utf-8")
+                for path in workflows.iterdir()
+            }
+
+            result = run(agentic_command(root, "--live", "--apply"), root)
+
+            self.assertEqual(result.returncode, 5)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["legacy_profile"], {"version": "v1", "staged": True})
+            actions = {item["path"]: item["action"] for item in report["files"]}
+            self.assertEqual(
+                actions[".github/workflows/agent-supervisor.md"],
+                "requires_staged_migration",
+            )
+            self.assertEqual(
+                actions[".github/workflows/agent-review.md"],
+                "requires_staged_migration",
+            )
+            self.assertEqual(
+                before,
+                {
+                    path.name: path.read_text(encoding="utf-8")
+                    for path in workflows.iterdir()
+                },
+            )
+            self.assertFalse((workflows / "agent-reconcile-metadata.yml").exists())
+
     def test_first_install_cannot_enable_live_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -730,6 +764,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertEqual(integrator.count("required-labels: [agent:managed]"), 3)
         self.assertIn("Never call a merge API", integrator)
         self.assertIn("closingIssuesReferences(first: 2)", reconciler)
+        self.assertIn("totalCount", reconciler)
+        self.assertIn("expected exactly one closing Issue", reconciler)
         self.assertIn("expected exactly one managed same-repository closing Issue", reconciler)
         self.assertIn("PROJECT_NUMBER: __GITHUB_PROJECT_NUMBER__", reconciler)
         self.assertIn("PROJECT_OWNER: __GITHUB_PROJECT_OWNER__", reconciler)
