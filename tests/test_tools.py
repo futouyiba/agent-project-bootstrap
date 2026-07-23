@@ -61,8 +61,8 @@ def install_legacy_staged_profile(root: Path, version: str = "v1") -> None:
                 "network:\n"
                 "  allowed:\n"
                 "    - defaults\n"
-                "    # The routed MCP gateway is a local Docker service used by gh-aw.\n"
-                "    - awmg-mcpg\n\n",
+                "    # gh-aw routes MCP requests through the host-published gateway.\n"
+                "    - host.docker.internal\n\n",
                 "",
             )
         content = (
@@ -1174,7 +1174,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("agent-reconcile-metadata", supervisor)
         for workflow in (supervisor, implementer, reviewer, integrator):
             self.assertIn("network:\n  allowed:\n    - defaults\n", workflow)
-            self.assertIn("    - awmg-mcpg", workflow)
+            self.assertIn("    - host.docker.internal", workflow)
         self.assertNotIn("update-project:", supervisor)
         self.assertNotIn("GH_AW_WRITE_PROJECT_TOKEN", supervisor)
         self.assertIn("cannot accept an Agent-supplied Project URL", supervisor)

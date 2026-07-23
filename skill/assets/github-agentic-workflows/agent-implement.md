@@ -50,8 +50,8 @@ permissions:
 network:
   allowed:
     - defaults
-    # The routed MCP gateway is a local Docker service used by gh-aw.
-    - awmg-mcpg
+    # gh-aw routes MCP requests through the host-published gateway.
+    - host.docker.internal
 
 checkout:
   fetch: ["refs/pull/*/head"]
