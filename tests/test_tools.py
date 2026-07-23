@@ -962,6 +962,8 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Never call a merge API", integrator)
         self.assertIn("closingIssuesReferences(first: 2)", reconciler)
         self.assertIn("totalCount", reconciler)
+        self.assertIn('issues/$PR_NUMBER', reconciler)
+        self.assertIn('<<<"$pr_issue_json"', reconciler)
         self.assertIn("expected exactly one closing Issue", reconciler)
         self.assertIn("expected exactly one managed same-repository closing Issue", reconciler)
         self.assertIn("PROJECT_NUMBER: __GITHUB_PROJECT_NUMBER__", reconciler)

@@ -46,8 +46,9 @@ jobs:
           esac
 
           pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          pr_issue_json="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER")"
           jq -e 'any(.labels[]?; .name == "agent:managed")' \
-            <<<"$pr_json" >/dev/null
+            <<<"$pr_issue_json" >/dev/null
 
           owner="${GITHUB_REPOSITORY%%/*}"
           repository="${GITHUB_REPOSITORY#*/}"
