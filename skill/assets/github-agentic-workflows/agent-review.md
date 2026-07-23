@@ -42,6 +42,12 @@ permissions:
   pull-requests: read
   statuses: read
 
+network:
+  allowed:
+    - defaults
+    # The routed MCP gateway is a local Docker service used by gh-aw.
+    - awmg-mcpg
+
 checkout:
   fetch: ["refs/pull/*/head"]
   fetch-depth: 0

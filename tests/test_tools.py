@@ -1159,6 +1159,9 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Never dispatch an approver-only role", supervisor)
         self.assertIn("repository-approved\n  current-head review signal", supervisor)
         self.assertIn("agent-reconcile-metadata", supervisor)
+        for workflow in (supervisor, implementer, reviewer, integrator):
+            self.assertIn("network:\n  allowed:\n    - defaults\n", workflow)
+            self.assertIn("    - awmg-mcpg", workflow)
         self.assertNotIn("update-project:", supervisor)
         self.assertNotIn("GH_AW_WRITE_PROJECT_TOKEN", supervisor)
         self.assertIn("cannot accept an Agent-supplied Project URL", supervisor)
