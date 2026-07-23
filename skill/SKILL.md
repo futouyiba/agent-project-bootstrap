@@ -30,7 +30,7 @@ If scope is not already clear, offer one concise choice:
 
 - **Coordination** — GitHub Issues/Projects conventions and Issue/PR templates.
 - **Delivery** — Coordination plus stack-appropriate CI and a branch-protection checklist. This is the default.
-- **Worktree** — Delivery plus Codex local-environment and worktree-isolation guidance.
+- **Worktree** — Delivery plus Codex local-environment and worktree-isolation guidance. Claude Code uses its own isolated worktrees and a setup script for the same isolation goals.
 
 Before writing, show the exact files to be changed. If the request did not authorize repository changes, wait for confirmation.
 
@@ -48,14 +48,14 @@ For an established repository, read [adopting an existing project](references/ad
 
 Read [GitHub coordination](references/github-coordination.md), [daily project flow](references/daily-project-flow.md), and [GitHub Project automation](references/github-project-automation.md). Read [managed autopilot](references/managed-autopilot.md) when the user requests continuous supervision. Read [GitHub Agentic Workflows](references/github-agentic-workflows.md) when the user requests webhook/event-driven agents or wants GitHub to hand work between agents without a local conversation. Read [CI and branch protection](references/ci-and-protection.md) before adding CI. Read [worktree environment](references/worktree-environment.md) only for the Worktree profile.
 
-- Merge stable, repository-specific operating rules into root `AGENTS.md`; do not overwrite it.
+- Merge stable, repository-specific operating rules into the repository's primary instruction file (`AGENTS.md` for Codex/ChatGPT, `CLAUDE.md` for Claude Code); do not overwrite it.
 - Put changing task state, ownership, dependencies, and acceptance criteria in GitHub, not a shared JSON or Markdown task table.
 - Record the Project URL, exact status names, validation commands, and standing authorization in repository instructions.
 - Reuse existing Issue templates, PR templates, and workflows. Do not replace them wholesale.
 - Use one branch and pull request per independently mergeable Issue and link them.
 - Add `.github/workflows/ci.yml` only when valid commands are established from the repository or confirmed by the user.
-- Create `.worktreeinclude` only for ignored local files that new Codex worktrees need. Never include dependency trees, build outputs, caches, database data directories, or broad secret directories.
-- Do not invent a `.codex` configuration format. Use the Codex desktop Local Environment UI where needed.
+- Create `.worktreeinclude` only for ignored local files that new Codex worktrees need (Codex-specific). Never include dependency trees, build outputs, caches, database data directories, or broad secret directories.
+- Do not invent a `.codex` configuration format. Use the Codex desktop Local Environment UI where needed; Claude Code users configure worktrees and the local environment through its own settings instead.
 
 ### Configure GitHub automation explicitly
 
@@ -82,7 +82,7 @@ After successful setup, create or update `.codex/agent-project-bootstrap.yml` wi
 
 ## Daily-flow mode
 
-Read [daily project flow](references/daily-project-flow.md) and follow the repository's `AGENTS.md`.
+Read [daily project flow](references/daily-project-flow.md) and follow the repository's primary instruction file (`AGENTS.md` for Codex/ChatGPT, `CLAUDE.md` for Claude Code).
 
 ### Resolve work from ordinary language
 
@@ -111,7 +111,7 @@ Read [managed autopilot](references/managed-autopilot.md) completely before enab
 - On each wake-up, refresh GitHub and continue the selected goal through routine implementation, review feedback, CI repair, and re-review cycles.
 - Treat GitHub as the mailbox and source of truth. Do not depend on the user copying messages between agents.
 - Reconcile Issue, Project, and PR state from current GitHub evidence. Do not dispatch an implementer merely to mark a PR ready, move an Issue to `In review`, or perform another metadata-only handoff when the supervisor is authorized to do it.
-- Use a recurring Codex Automation as a heartbeat when available. Do not claim it is an event webhook or that it runs while the required local client is offline.
+- Use a recurring Codex Automation as a heartbeat when available. Claude Code has no equivalent built-in heartbeat, so use an external scheduler or the optional GitHub Agentic Workflows layer instead. Do not claim a scheduled task is an event webhook or that it runs while the required local client is offline.
 - Prefer GitHub built-in workflows, required checks, automatic Codex review, and repository auto-merge for deterministic transitions. Use GitHub Agentic Workflows only as an explicit opt-in event-driven execution layer because it requires an engine credential, Actions minutes/cost, generated lock files, and a deliberate threat model.
 - Stop and ask at the repository's human gates or after the configured retry limit. Record the blocker on the Issue or PR before escalating once.
 - Never let managed mode authorize deployment, publishing, deletion, destructive data changes, secret or billing changes, scope expansion, or high-risk merges unless repository policy explicitly grants that exact action.

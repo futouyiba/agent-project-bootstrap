@@ -32,8 +32,8 @@ GitHub plan limits and available triggers can differ. Verify the saved workflow 
 
 Make those transitions event-driven and idempotent where practical. A `pull_request.ready_for_review` workflow or the single managed supervisor may move the linked Issue to `In review`; closing-keyword linkage plus the built-in Issue-closed workflow can move it to `Done`. Do not route a task back to its implementer solely to correct Project metadata.
 
-Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
+Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs; Claude Code users rely on external review tooling or the GitHub Agentic Workflows reviewer. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
 
 ## Recording the result
 
-Store the Project URL, exact status spelling, and any pending automation in repository `AGENTS.md` and `.codex/agent-project-bootstrap.yml`. Do not put these repository-specific values in the user's global `AGENTS.md`.
+Store the Project URL, exact status spelling, and any pending automation in repository `AGENTS.md` (Codex/ChatGPT) or `CLAUDE.md` (Claude Code) and `.codex/agent-project-bootstrap.yml`. Do not put these repository-specific values in the user's global instruction file.

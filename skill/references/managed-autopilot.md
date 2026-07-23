@@ -10,7 +10,7 @@ Use `supervised` when the heartbeat may continue routine work but merge still ne
 
 ## Required repository policy
 
-Before enabling managed mode, record these values in root `AGENTS.md` and `.codex/agent-project-bootstrap.yml`:
+Before enabling managed mode, record these values in root `AGENTS.md` (Codex/ChatGPT) or `CLAUDE.md` (Claude Code) and `.codex/agent-project-bootstrap.yml`:
 
 - enabled state and goal or Issue scope;
 - supervisor type, normally a recurring thread Automation;
@@ -89,6 +89,6 @@ This policy never implies deployment or publishing.
 
 ## Automation setup
 
-When the Codex client exposes Automations, use [the managed supervisor prompt](../assets/codex-managed-supervisor.md) as the instruction body and attach it to the supervisor task. Ask once for the cadence if repository policy does not define it. Prefer 15–30 minutes for active delivery and a slower schedule for maintenance.
+When the Codex client exposes Automations, use [the managed supervisor prompt](../assets/codex-managed-supervisor.md) as the instruction body and attach it to the supervisor task. Ask once for the cadence if repository policy does not define it. Prefer 15–30 minutes for active delivery and a slower schedule for maintenance. Claude Code has no built-in recurring Automation; drive the same supervisor prompt from an external scheduler, or use the GitHub Agentic Workflows profile instead.
 
 Scheduled heartbeats are not GitHub webhooks. Local heartbeats may also require the desktop client to remain available. If true event-driven execution is required, read [GitHub Agentic Workflows](github-agentic-workflows.md) and offer its staged profile. It compiles Markdown agent workflows into GitHub Actions and can use Codex or another supported engine. Require a separate security review before adding an API key or live safe outputs. Validate trusted actors, untrusted PR content, prompt-injection exposure, workflow permissions, generated lock files, concurrency, and cost limits. Do not enable write-capable event automation by default.

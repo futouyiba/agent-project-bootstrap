@@ -23,4 +23,4 @@ After the workflow succeeds at least once, configure a branch ruleset or protect
 
 Do not enable every setting automatically. A single-owner repository may set required approvals to zero and use a traceable current-head Agent review signal instead; document its marker, provenance, stale-head behavior, and blocking-finding semantics in `AGENTS.md`. Never call that signal a human GitHub approval. Signed commits, linear history, merge queues, stale-approval dismissal, and deployment gates are project policy choices.
 
-For managed mode, decide separately whether qualifying low-risk PRs may use GitHub auto-merge or a merge queue. Record that standing policy in repository `AGENTS.md`; installing the skill or enabling CI alone never authorizes automatic merge. Keep high-risk paths and labels outside unattended merge.
+For managed mode, decide separately whether qualifying low-risk PRs may use GitHub auto-merge or a merge queue. Record that standing policy in repository `AGENTS.md` (Codex/ChatGPT) or `CLAUDE.md` (Claude Code); installing the skill or enabling CI alone never authorizes automatic merge. Keep high-risk paths and labels outside unattended merge.

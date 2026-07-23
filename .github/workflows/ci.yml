@@ -34,6 +34,26 @@ jobs:
           sh ./install.sh --source . --codex-home "$RUNNER_TEMP/codex-home" --with-global-rule
           test -f "$RUNNER_TEMP/codex-home/skills/agent-project-bootstrap/SKILL.md"
           test -f "$RUNNER_TEMP/codex-home/prompts/integrate.md"
+      - name: Test POSIX installer (Claude target)
+        if: runner.os != 'Windows'
+        shell: sh
+        run: |
+          sh ./install.sh --source . --target claude --claude-home "$RUNNER_TEMP/claude-home" --with-global-rule
+          test -f "$RUNNER_TEMP/claude-home/skills/agent-project-bootstrap/SKILL.md"
+          test -f "$RUNNER_TEMP/claude-home/commands/integrate.md"
+          test ! -e "$RUNNER_TEMP/claude-home/prompts"
+          grep -q 'agent-project-bootstrap:start' "$RUNNER_TEMP/claude-home/CLAUDE.md"
+          grep -q '/integrate' "$RUNNER_TEMP/claude-home/CLAUDE.md"
+          sh ./install.sh --source . --target claude --claude-home "$RUNNER_TEMP/claude-home" --with-global-rule
+          test "$(grep -c 'agent-project-bootstrap:start' "$RUNNER_TEMP/claude-home/CLAUDE.md")" -eq 1
+          mkdir -p "$RUNNER_TEMP/claude-partial"
+          printf 'before\n<!-- agent-project-bootstrap:start -->\nstale\nafter\n' > "$RUNNER_TEMP/claude-partial/CLAUDE.md"
+          claude_partial_original="$(cat "$RUNNER_TEMP/claude-partial/CLAUDE.md")"
+          if sh ./install.sh --source . --target claude --claude-home "$RUNNER_TEMP/claude-partial" --with-global-rule 2>/dev/null; then
+            exit 1
+          fi
+          test "$(cat "$RUNNER_TEMP/claude-partial/CLAUDE.md")" = "$claude_partial_original"
+
       - name: Test PowerShell installer
         if: runner.os == 'Windows'
         shell: pwsh
@@ -90,4 +110,31 @@ jobs:
             if ((Get-Content -Raw $inlinePath) -ne $inlineOriginal) {
               throw "Inline marker case $index modified AGENTS.md"
             }
+          }
+
+      - name: Test PowerShell installer (Claude target)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/claude-home" | Out-Null
+          ./install.ps1 -Source . -Target claude -ClaudeHome "$env:RUNNER_TEMP/claude-home" -WithGlobalRule
+          ./install.ps1 -Source . -Target claude -ClaudeHome "$env:RUNNER_TEMP/claude-home" -WithGlobalRule
+          if (-not (Test-Path "$env:RUNNER_TEMP/claude-home/skills/agent-project-bootstrap/SKILL.md")) { exit 1 }
+          if (-not (Test-Path "$env:RUNNER_TEMP/claude-home/commands/integrate.md")) { exit 1 }
+          if (Test-Path "$env:RUNNER_TEMP/claude-home/prompts") { exit 1 }
+          $claudeMd = Get-Content -Raw "$env:RUNNER_TEMP/claude-home/CLAUDE.md"
+          if (-not $claudeMd.Contains("one durable supervisor")) { exit 1 }
+          if (-not $claudeMd.Contains("/integrate")) { exit 1 }
+          if ($claudeMd.Contains("/prompts:integrate")) { exit 1 }
+          if ([regex]::Matches($claudeMd, '<!-- agent-project-bootstrap:start -->').Count -ne 1) { exit 1 }
+
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/claude-partial" | Out-Null
+          $claudePartialPath = "$env:RUNNER_TEMP/claude-partial/CLAUDE.md"
+          $claudePartialOriginal = "before`n<!-- agent-project-bootstrap:start -->`nstale`nafter`n"
+          Set-Content -Path $claudePartialPath -Value $claudePartialOriginal -NoNewline
+          try {
+            ./install.ps1 -Source . -Target claude -ClaudeHome "$env:RUNNER_TEMP/claude-partial" -WithGlobalRule
+            exit 1
+          } catch {
+            if ((Get-Content -Raw $claudePartialPath) -ne $claudePartialOriginal) { exit 1 }
           }
