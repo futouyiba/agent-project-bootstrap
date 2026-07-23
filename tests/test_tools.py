@@ -52,8 +52,21 @@ def install_legacy_staged_profile(root: Path, version: str = "v1") -> None:
     for name in LEGACY_WORKFLOW_NAMES:
         fixture = fixture_directory / name
         source = fixture if fixture.exists() else AGENTIC_ASSETS / name
+        content = source.read_text(encoding="utf-8")
+        # v1 predates the local MCP gateway exception added to the current
+        # templates. The two unchanged v1 files use the current assets as a
+        # compact fixture, so restore their exact historical content here.
+        if version == "v1" and not fixture.exists():
+            content = content.replace(
+                "network:\n"
+                "  allowed:\n"
+                "    - defaults\n"
+                "    # The routed MCP gateway is a local Docker service used by gh-aw.\n"
+                "    - awmg-mcpg\n\n",
+                "",
+            )
         content = (
-            source.read_text(encoding="utf-8")
+            content
             .replace("__ENGINE__", "codex")
             .replace("__STAGED__", "true")
             .replace("__CI_BRANCH_PATTERN__", json.dumps("**"))
