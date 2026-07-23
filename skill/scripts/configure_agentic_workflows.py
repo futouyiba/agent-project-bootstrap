@@ -40,6 +40,15 @@ PROJECT_URL_PATTERN = re.compile(
     r"projects/(?P<number>[1-9][0-9]*)"
 )
 LEGACY_PROFILE_TEMPLATE_HASHES = {
+    # v0 is the staged profile released on main before the metadata reconciler
+    # and recoverable migration support. Keep it recognizable so pristine
+    # installations receive the same atomic upgrade path as later profiles.
+    "v0": {
+        "agent-supervisor.md": "7c0b5eacb956f48ff22e8b58b3acc4431419f011603ef75af66ed6c49f9d803b",
+        "agent-implement.md": "3ed251521396b6ab4099a6d7ac4f0860226127b95a06d38fcb2ed260fb3bb966",
+        "agent-review.md": "bd3e59d52240dac50c7072ef6eee1263ef6fd0c6a3d0412232e4be5826110b97",
+        "agent-integrate.md": "93173fde0c06027219b81c6d6fcd0a092f9b68851fe0bbc082f0b9618b7ea3f5",
+    },
     "v1": {
         "agent-supervisor.md": "a607c36fe04fad7f24fab44d630b5092c054472b1fab8cbfa2e3ef7daef5ae75",
         "agent-implement.md": "d9840f6166767b66073ae1e79acfc1f24a1139f695fc44c4482a1c1ca51b4de4",

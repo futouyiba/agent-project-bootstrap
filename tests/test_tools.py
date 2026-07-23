@@ -18,6 +18,7 @@ AGENTIC = REPOSITORY / "skill" / "scripts" / "configure_agentic_workflows.py"
 GITHUB_PROJECT = "https://github.com/orgs/example/projects/1"
 AGENTIC_ASSETS = REPOSITORY / "skill" / "assets" / "github-agentic-workflows"
 LEGACY_PROFILE_V1 = REPOSITORY / "tests" / "fixtures" / "legacy-agentic-profile-v1"
+LEGACY_PROFILE_V0 = REPOSITORY / "tests" / "fixtures" / "legacy-agentic-profile-v0"
 LEGACY_WORKFLOW_NAMES = (
     "agent-supervisor.md",
     "agent-implement.md",
@@ -41,11 +42,15 @@ def agentic_command(root: Path, *arguments: str) -> list[str]:
     ]
 
 
-def install_legacy_staged_profile(root: Path) -> None:
+def install_legacy_staged_profile(root: Path, version: str = "v1") -> None:
     workflows = root / ".github" / "workflows"
     workflows.mkdir(parents=True)
+    fixture_directory = {
+        "v0": LEGACY_PROFILE_V0,
+        "v1": LEGACY_PROFILE_V1,
+    }[version]
     for name in LEGACY_WORKFLOW_NAMES:
-        fixture = LEGACY_PROFILE_V1 / name
+        fixture = fixture_directory / name
         source = fixture if fixture.exists() else AGENTIC_ASSETS / name
         content = (
             source.read_text(encoding="utf-8")
@@ -267,6 +272,32 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             self.assertFalse(second_report["recovered_transaction"])
             self.assertTrue(
                 all(item["action"] == "unchanged" for item in second_report["files"])
+            )
+
+    def test_released_staged_profile_migrates_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root, "v0")
+
+            preview = run(agentic_command(root), root)
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            report = json.loads(preview.stdout)
+            self.assertEqual(report["legacy_profile"], {"version": "v0", "staged": True})
+            actions = {item["path"]: item["action"] for item in report["files"]}
+            self.assertEqual(
+                actions[".github/workflows/agent-supervisor.md"],
+                "migrate_generated",
+            )
+
+            applied = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            final_report = json.loads(applied.stdout)
+            self.assertIsNone(final_report["legacy_profile"])
+            self.assertTrue(
+                all(item["action"] == "unchanged" for item in final_report["files"])
             )
 
     def test_modified_legacy_profile_blocks_migration_without_writes(self) -> None:
