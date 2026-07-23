@@ -1053,7 +1053,14 @@ class SkillContractTests(unittest.TestCase):
             "allowed: [agent:needs-review, agent:needs-rework, needs:human]",
             supervisor,
         )
-        self.assertIn("allowed: [agent:needs-review, agent:needs-rework]", supervisor)
+        self.assertIn(
+            "allowed: [agent:needs-review, agent:needs-rework, needs:human]",
+            supervisor,
+        )
+        self.assertIn(
+            "After verifying that response resolves the exact recorded gate",
+            supervisor,
+        )
         self.assertNotIn("agent:merge-ready, needs:human]", supervisor)
         self.assertIn("github.event.workflow_run.event == 'pull_request'", supervisor)
         self.assertIn("branches: [__CI_BRANCH_PATTERN__]", supervisor)

@@ -56,7 +56,7 @@ safe-outputs:
     required-labels: [agent:managed]
     max: 3
   remove-labels:
-    allowed: [agent:needs-review, agent:needs-rework]
+    allowed: [agent:needs-review, agent:needs-rework, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
@@ -111,6 +111,9 @@ merge-readiness evidence and still carries `agent:merge-ready`, treat it as a
 terminal handoff and do nothing until its head or GitHub gate state changes. If
 an item already carries `needs:human`, do not repeat the escalation or
 dispatch work until a new authorized human response resolves the recorded gate.
+After verifying that response resolves the exact recorded gate, remove only
+`needs:human` before resuming normal routing; do not clear it merely because a
+new comment or event arrived.
 Count completed implementation/review/CI repair cycles from PR comments, reviews,
 workflow runs, and head SHAs. After three failed cycles for the same blocking
 condition, stop dispatching workers. If product scope, security, cost, data
