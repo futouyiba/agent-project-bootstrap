@@ -104,4 +104,3 @@ with the verified head SHA and evidence. If a routine code or CI correction is
 needed, remove `agent:merge-ready` and add `agent:needs-rework`. If a human gate
 is reached, remove `agent:merge-ready`, add `needs:human`, and state the
 exact decision required.
-

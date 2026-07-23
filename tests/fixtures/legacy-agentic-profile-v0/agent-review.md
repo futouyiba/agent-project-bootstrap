@@ -115,4 +115,3 @@ defect remains, submit a `COMMENT` review whose first line is
 handoff, not a GitHub approval and not merge authorization. If a product,
 security, or policy decision is needed, use `needs:human` and state the
 single decision required.
-

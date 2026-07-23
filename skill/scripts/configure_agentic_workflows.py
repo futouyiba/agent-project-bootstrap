@@ -44,10 +44,10 @@ LEGACY_PROFILE_TEMPLATE_HASHES = {
     # and recoverable migration support. Keep it recognizable so pristine
     # installations receive the same atomic upgrade path as later profiles.
     "v0": {
-        "agent-supervisor.md": "7c0b5eacb956f48ff22e8b58b3acc4431419f011603ef75af66ed6c49f9d803b",
-        "agent-implement.md": "3ed251521396b6ab4099a6d7ac4f0860226127b95a06d38fcb2ed260fb3bb966",
-        "agent-review.md": "bd3e59d52240dac50c7072ef6eee1263ef6fd0c6a3d0412232e4be5826110b97",
-        "agent-integrate.md": "93173fde0c06027219b81c6d6fcd0a092f9b68851fe0bbc082f0b9618b7ea3f5",
+        "agent-supervisor.md": "bcb7e73e50e0c4a586c2d97d1e755c17c82ece86ec7fc83732139621722a248a",
+        "agent-implement.md": "7386153631ca960f7610406456f28d806ff27dcd7ca63f271b7ab7ba051bcf1a",
+        "agent-review.md": "11bd78faa9a8e60bb17f89362447051a76e28196e7c310a279d31dde8a511bd3",
+        "agent-integrate.md": "1257acc24865eaa93ce62e203fd8f25cea2a2feaeb36a8ff4bbc8f97fae1d6e0",
     },
     "v1": {
         "agent-supervisor.md": "a607c36fe04fad7f24fab44d630b5092c054472b1fab8cbfa2e3ef7daef5ae75",
@@ -111,9 +111,12 @@ def validate_destination(repository: Path) -> Path:
 
 def ensure_destination(repository: Path) -> Path:
     for candidate in (repository / ".github", repository / ".github" / "workflows"):
+        existed = candidate.exists()
         candidate.mkdir(exist_ok=True)
         if candidate.is_symlink() or not candidate.is_dir():
             raise UnsafeDestinationError(f"unsafe directory: {candidate}")
+        if not existed:
+            fsync_directory(candidate.parent)
     return validate_destination(repository)
 
 
@@ -206,6 +209,7 @@ def cleanup_workflow_transaction(transaction: Path) -> None:
         )
     if transaction.exists():
         shutil.rmtree(transaction)
+        fsync_directory(transaction.parent)
 
 
 def load_workflow_transaction(
@@ -347,6 +351,7 @@ def prepare_workflow_transaction(
         )
 
     transaction.mkdir()
+    fsync_directory(transaction.parent)
     entries: list[dict[str, object]] = []
     try:
         names: set[str] = set()
@@ -386,6 +391,7 @@ def prepare_workflow_transaction(
             )
             + "\n",
         )
+        fsync_directory(transaction.parent)
     except BaseException as error:
         try:
             cleanup_workflow_transaction(transaction)

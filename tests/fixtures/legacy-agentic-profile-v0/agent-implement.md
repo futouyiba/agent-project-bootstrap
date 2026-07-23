@@ -134,4 +134,3 @@ Never approve or merge your own work.
 If requirements conflict, the requested fix would expand scope, or safe repair
 is impossible, make no code change; add `needs:human` and one concise
 comment with the decision required.
-

@@ -94,4 +94,3 @@ condition, stop dispatching workers. If product scope, security, cost, data
 migration, merge policy, or that retry limit needs a human decision, add
 `needs:human` and one concise comment containing the exact decision needed.
 If nothing is actionable, emit no write or dispatch output.
-

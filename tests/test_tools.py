@@ -416,6 +416,74 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 all(item["action"] == "unchanged" for item in retry_report["files"])
             )
 
+    def test_manifest_parent_is_synced_before_target_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            module = load_agentic_module()
+            report = module.plan(root, "codex", True, "**", "CI", GITHUB_PROJECT)
+            writes = module.rendered_workflow_writes(
+                root,
+                report,
+                "codex",
+                True,
+                "**",
+                "CI",
+                GITHUB_PROJECT,
+            )
+            events: list[tuple[str, Path]] = []
+            github = (root / ".github").resolve()
+            transaction = module.workflow_transaction_directory(root)
+            transaction_present_at_github_sync: list[bool] = []
+            real_fsync_directory = module.fsync_directory
+            real_atomic_write = module.atomic_write
+
+            def record_sync(path: Path) -> None:
+                resolved = path.resolve()
+                events.append(("sync", resolved))
+                if resolved == github:
+                    transaction_present_at_github_sync.append(transaction.exists())
+                real_fsync_directory(path)
+
+            def record_atomic_write(target: Path, content: str) -> None:
+                real_atomic_write(target, content)
+                if target.name == module.TRANSACTION_MANIFEST_NAME:
+                    events.append(("manifest", target.resolve()))
+
+            def record_target_replacement(source: Path, target: Path) -> None:
+                events.append(("replace", target.resolve()))
+                os.replace(source, target)
+
+            module.fsync_directory = record_sync
+            module.atomic_write = record_atomic_write
+            try:
+                module.apply_workflow_transaction(
+                    root,
+                    writes,
+                    replace_file=record_target_replacement,
+                )
+            finally:
+                module.atomic_write = real_atomic_write
+                module.fsync_directory = real_fsync_directory
+
+            manifest_index = next(
+                index for index, event in enumerate(events) if event[0] == "manifest"
+            )
+            replace_index = next(
+                index for index, event in enumerate(events) if event[0] == "replace"
+            )
+            github_syncs = [
+                index
+                for index, event in enumerate(events)
+                if event == ("sync", github)
+            ]
+            self.assertEqual(transaction_present_at_github_sync[:2], [True, True])
+            self.assertTrue(any(index < manifest_index for index in github_syncs))
+            self.assertTrue(
+                any(manifest_index < index < replace_index for index in github_syncs)
+            )
+
     def test_interrupted_migration_is_recovered_before_retry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -995,6 +1063,10 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("totalCount", reconciler)
         self.assertIn('issues/$PR_NUMBER', reconciler)
         self.assertIn('<<<"$pr_issue_json"', reconciler)
+        self.assertIn('.state == "open" and .merged == false', reconciler)
+        self.assertIn('.state == "OPEN"', reconciler)
+        self.assertIn('issues/$ISSUE_NUMBER', reconciler)
+        self.assertIn("REPOSITORY_TOKEN: ${{ github.token }}", reconciler)
         self.assertIn("expected exactly one closing Issue", reconciler)
         self.assertIn("expected exactly one managed same-repository closing Issue", reconciler)
         self.assertIn("PROJECT_NUMBER: __GITHUB_PROJECT_NUMBER__", reconciler)
