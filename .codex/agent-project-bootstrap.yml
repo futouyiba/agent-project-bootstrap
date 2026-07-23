@@ -7,7 +7,7 @@ github_project_automation: configured
 managed_mode:
   enabled: true
   level: supervised
-  goal_scope: Issue #7 and dependency pull-request chain (#6, #8)
+  goal_scope: "Issue #7 and dependency pull-request chain (#6, #8)"
   supervisor: Codex local recurring automation (agent-project-bootstrap-supervised-delivery)
   heartbeat: every 30 minutes
   local_client_required: true

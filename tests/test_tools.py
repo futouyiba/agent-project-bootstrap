@@ -452,11 +452,58 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Never deploy or publish", prompt)
         self.assertIn("version: 5", marker)
         self.assertIn("managed_mode:", marker)
-        self.assertIn("enabled: true", marker)
-        self.assertIn("level: supervised", marker)
-        self.assertIn("goal_scope: Issue #7 and dependency pull-request chain (#6, #8)", marker)
-        self.assertIn("retry_limit: 3", marker)
-        self.assertIn("merge_policy: per_turn", marker)
+
+        marker_lines = marker.splitlines()
+        managed_start = marker_lines.index("managed_mode:") + 1
+        managed_config: dict[str, str] = {}
+        for line in marker_lines[managed_start:]:
+            if not line.startswith("  "):
+                break
+            key, value = line.strip().split(":", 1)
+            managed_config[key] = value.strip()
+
+        required_managed_fields = {
+            "enabled",
+            "level",
+            "goal_scope",
+            "supervisor",
+            "heartbeat",
+            "local_client_required",
+            "retry_limit",
+            "automatic_review",
+            "merge_policy",
+            "low_risk_merge_criteria",
+            "high_risk_paths_or_labels",
+            "human_gates",
+            "deployment_and_publishing",
+        }
+        self.assertLessEqual(required_managed_fields, set(managed_config))
+        self.assertIn(managed_config["enabled"], {"true", "false"})
+        self.assertTrue(managed_config["retry_limit"].isdigit())
+        self.assertGreater(int(managed_config["retry_limit"]), 0)
+        self.assertIn(
+            managed_config["merge_policy"],
+            {"per_turn", "qualified_auto_merge", "manual"},
+        )
+        self.assertEqual(managed_config["deployment_and_publishing"], "never")
+
+        if managed_config["enabled"] == "false":
+            self.assertEqual(managed_config["level"], "off")
+            self.assertEqual(managed_config["goal_scope"], "null")
+            self.assertEqual(managed_config["supervisor"], "null")
+            self.assertEqual(managed_config["heartbeat"], "null")
+            self.assertEqual(managed_config["local_client_required"], "pending")
+        else:
+            self.assertIn(managed_config["level"], {"supervised", "autonomous"})
+            for field in ("goal_scope", "supervisor", "heartbeat"):
+                self.assertNotIn(managed_config[field], {"", "null", "pending"})
+            self.assertIn(managed_config["local_client_required"], {"true", "false"})
+
+            goal_scope = managed_config["goal_scope"]
+            if "#" in goal_scope:
+                self.assertIn(goal_scope[0], {'"', "'"})
+                self.assertEqual(goal_scope[-1], goal_scope[0])
+
         self.assertIn("github_agentic_workflows:", marker)
         self.assertIn("rollout: off", marker)
         self.assertIn("merge_capability: disabled", marker)
