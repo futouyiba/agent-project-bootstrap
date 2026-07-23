@@ -19,7 +19,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable, Iterator
 
 
 WORKFLOW_NAMES = (
@@ -45,6 +47,9 @@ LEGACY_PROFILE_TEMPLATE_HASHES = {
         "agent-integrate.md": "1257acc24865eaa93ce62e203fd8f25cea2a2feaeb36a8ff4bbc8f97fae1d6e0",
     },
 }
+TRANSACTION_DIRECTORY_NAME = ".agent-project-bootstrap-workflow-transaction"
+TRANSACTION_MANIFEST_NAME = "manifest.json"
+TRANSACTION_VERSION = 1
 
 
 def git_root(path: Path) -> Path | None:
@@ -60,6 +65,10 @@ def git_root(path: Path) -> Path | None:
 
 
 class UnsafeDestinationError(ValueError):
+    pass
+
+
+class WorkflowTransactionError(RuntimeError):
     pass
 
 
@@ -100,16 +109,323 @@ def ensure_destination(repository: Path) -> Path:
 
 
 def atomic_write(target: Path, content: str) -> None:
+    atomic_write_bytes(target, content.encode("utf-8"))
+
+
+def atomic_write_bytes(target: Path, content: bytes) -> None:
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
     temporary = Path(temporary_name)
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        with os.fdopen(descriptor, "wb") as stream:
             stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.chmod(temporary, 0o644)
         os.replace(temporary, target)
+        fsync_directory(target.parent)
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def fsync_directory(directory: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def sha256_bytes(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def workflow_transaction_directory(repository: Path) -> Path:
+    return repository.resolve(strict=True) / ".github" / TRANSACTION_DIRECTORY_NAME
+
+
+@contextmanager
+def workflow_transaction_lock(repository: Path) -> Iterator[None]:
+    identity = hashlib.sha256(str(repository.resolve()).encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"agent-project-bootstrap-{identity}.lock"
+    try:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as error:
+        raise WorkflowTransactionError(
+            "cannot open the workflow transaction lock"
+        ) from error
+    locked = False
+    try:
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except OSError as error:
+            raise WorkflowTransactionError(
+                "another configurator process holds the workflow transaction lock"
+            ) from error
+        yield
+    finally:
+        if locked:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
+def cleanup_workflow_transaction(transaction: Path) -> None:
+    if transaction.is_symlink():
+        raise WorkflowTransactionError(
+            f"refusing symbolic-link transaction directory: {transaction}"
+        )
+    if transaction.exists():
+        shutil.rmtree(transaction)
+
+
+def load_workflow_transaction(
+    repository: Path,
+) -> tuple[Path, list[dict[str, object]]] | None:
+    transaction = workflow_transaction_directory(repository)
+    if not transaction.exists():
+        return None
+    if transaction.is_symlink() or not transaction.is_dir():
+        raise WorkflowTransactionError(f"unsafe workflow transaction path: {transaction}")
+
+    manifest_path = transaction / TRANSACTION_MANIFEST_NAME
+    if not manifest_path.exists():
+        cleanup_workflow_transaction(transaction)
+        return None
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise WorkflowTransactionError(f"unsafe workflow transaction manifest: {manifest_path}")
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise WorkflowTransactionError(
+            f"cannot read workflow transaction manifest: {manifest_path}"
+        ) from error
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("version") != TRANSACTION_VERSION
+        or not isinstance(manifest.get("files"), list)
+    ):
+        raise WorkflowTransactionError(f"invalid workflow transaction manifest: {manifest_path}")
+
+    entries = manifest["files"]
+    names: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise WorkflowTransactionError("invalid workflow transaction entry")
+        name = entry.get("name")
+        existed = entry.get("existed")
+        old_hash = entry.get("old_sha256")
+        new_hash = entry.get("new_sha256")
+        backup = entry.get("backup")
+        staged = entry.get("staged")
+        if (
+            not isinstance(name, str)
+            or name not in WORKFLOW_NAMES
+            or name in names
+            or not isinstance(existed, bool)
+            or (existed and not isinstance(old_hash, str))
+            or (not existed and old_hash is not None)
+            or not isinstance(new_hash, str)
+            or (existed and not isinstance(backup, str))
+            or (not existed and backup is not None)
+            or not isinstance(staged, str)
+        ):
+            raise WorkflowTransactionError("invalid workflow transaction entry")
+        for artifact in (backup, staged):
+            if artifact is None:
+                continue
+            artifact_path = transaction / artifact
+            if (
+                Path(artifact).name != artifact
+                or artifact_path.is_symlink()
+                or not is_within(artifact_path.resolve(strict=False), transaction)
+            ):
+                raise WorkflowTransactionError("unsafe workflow transaction artifact")
+        names.add(name)
+    return transaction, entries
+
+
+def recover_workflow_transaction(repository: Path) -> bool:
+    try:
+        return _recover_workflow_transaction(repository)
+    except WorkflowTransactionError:
+        raise
+    except OSError as error:
+        raise WorkflowTransactionError(
+            "could not recover the pending workflow transaction"
+        ) from error
+
+
+def _recover_workflow_transaction(repository: Path) -> bool:
+    loaded = load_workflow_transaction(repository)
+    if loaded is None:
+        return False
+    transaction, entries = loaded
+    destination = validate_destination(repository)
+
+    for entry in entries:
+        name = str(entry["name"])
+        target = destination / name
+        existed = bool(entry["existed"])
+        old_hash = entry["old_sha256"]
+        new_hash = str(entry["new_sha256"])
+        current = target.read_bytes() if target.exists() else None
+        current_hash = sha256_bytes(current) if current is not None else None
+
+        if existed:
+            if current_hash == old_hash:
+                continue
+            if current_hash != new_hash:
+                raise WorkflowTransactionError(
+                    f"cannot recover workflow with unexpected content: {target}"
+                )
+            backup_path = transaction / str(entry["backup"])
+            if not backup_path.is_file() or backup_path.is_symlink():
+                raise WorkflowTransactionError(f"missing workflow transaction backup: {target}")
+            backup = backup_path.read_bytes()
+            if sha256_bytes(backup) != old_hash:
+                raise WorkflowTransactionError(f"invalid workflow transaction backup: {target}")
+            atomic_write_bytes(target, backup)
+        else:
+            if current is None:
+                continue
+            if current_hash != new_hash:
+                raise WorkflowTransactionError(
+                    f"cannot recover newly created workflow with unexpected content: {target}"
+                )
+            target.unlink()
+            fsync_directory(destination)
+
+    cleanup_workflow_transaction(transaction)
+    return True
+
+
+def prepare_workflow_transaction(
+    repository: Path,
+    writes: list[tuple[Path, str]],
+) -> tuple[Path, list[dict[str, object]]]:
+    if not writes:
+        raise WorkflowTransactionError("cannot prepare an empty workflow transaction")
+    destination = ensure_destination(repository)
+    transaction = workflow_transaction_directory(repository)
+    if transaction.exists():
+        raise WorkflowTransactionError(
+            "pending workflow transaction must be recovered before applying"
+        )
+
+    transaction.mkdir()
+    entries: list[dict[str, object]] = []
+    try:
+        names: set[str] = set()
+        for index, (target, content) in enumerate(writes):
+            if (
+                target.parent != destination
+                or target.name not in WORKFLOW_NAMES
+                or target.name in names
+                or target.is_symlink()
+            ):
+                raise WorkflowTransactionError(f"invalid workflow transaction target: {target}")
+            names.add(target.name)
+            old = target.read_bytes() if target.exists() else None
+            new = content.encode("utf-8")
+            staged_name = f"{index:02d}-{target.name}.staged"
+            backup_name = f"{index:02d}-{target.name}.backup" if old is not None else None
+            atomic_write_bytes(transaction / staged_name, new)
+            if backup_name is not None:
+                atomic_write_bytes(transaction / backup_name, old)
+            entries.append(
+                {
+                    "name": target.name,
+                    "existed": old is not None,
+                    "old_sha256": sha256_bytes(old) if old is not None else None,
+                    "new_sha256": sha256_bytes(new),
+                    "backup": backup_name,
+                    "staged": staged_name,
+                }
+            )
+
+        atomic_write(
+            transaction / TRANSACTION_MANIFEST_NAME,
+            json.dumps(
+                {"version": TRANSACTION_VERSION, "files": entries},
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+        )
+    except BaseException as error:
+        try:
+            cleanup_workflow_transaction(transaction)
+        except BaseException as cleanup_error:
+            raise WorkflowTransactionError(
+                "workflow transaction preparation failed and cleanup is incomplete"
+            ) from cleanup_error
+        raise WorkflowTransactionError("could not prepare workflow transaction") from error
+    return transaction, entries
+
+
+def apply_workflow_transaction(
+    repository: Path,
+    writes: list[tuple[Path, str]],
+    replace_file: Callable[[Path, Path], None] = os.replace,
+) -> None:
+    if not writes:
+        return
+    destination = ensure_destination(repository)
+    transaction, entries = prepare_workflow_transaction(repository, writes)
+    try:
+        for entry in entries:
+            staged = transaction / str(entry["staged"])
+            target = destination / str(entry["name"])
+            current = target.read_bytes() if target.exists() else None
+            current_hash = sha256_bytes(current) if current is not None else None
+            if current_hash != entry["old_sha256"]:
+                raise WorkflowTransactionError(
+                    f"workflow changed after transaction preparation: {target}"
+                )
+            replace_file(staged, target)
+            fsync_directory(destination)
+    except BaseException as error:
+        try:
+            recover_workflow_transaction(repository)
+        except BaseException as recovery_error:
+            raise WorkflowTransactionError(
+                "workflow transaction failed and automatic rollback is incomplete"
+            ) from recovery_error
+        raise WorkflowTransactionError(
+            "workflow transaction failed and all target files were rolled back"
+        ) from error
+
+    manifest = transaction / TRANSACTION_MANIFEST_NAME
+    try:
+        manifest.unlink()
+        cleanup_workflow_transaction(transaction)
+    except OSError as error:
+        raise WorkflowTransactionError(
+            "workflows were committed but transaction cleanup is incomplete; "
+            "rerun with --apply to verify and clean up"
+        ) from error
 
 
 def github_project_url(value: str) -> str:
@@ -216,6 +532,7 @@ def plan(
     ci_workflow: str,
     github_project: str,
 ) -> dict[str, object]:
+    repository = repository.resolve(strict=True)
     assets = Path(__file__).resolve().parents[1] / "assets" / "github-agentic-workflows"
     destination = validate_destination(repository)
     files: list[dict[str, str]] = []
@@ -285,6 +602,7 @@ def plan(
         "tested_gh_aw_version": TESTED_GH_AW_VERSION,
         "files": files,
         "legacy_profile": legacy_profile,
+        "recovered_transaction": False,
         "conflicts": conflicts,
         "blocked": blocked,
         "required_secret": "OPENAI_API_KEY" if engine == "codex" else "engine-specific",
@@ -297,6 +615,48 @@ def plan(
             "run staged trials before changing rollout to live",
         ],
     }
+
+
+def rendered_workflow_writes(
+    repository: Path,
+    report: dict[str, object],
+    engine: str,
+    staged: bool,
+    ci_branch_pattern: str,
+    ci_workflow: str,
+    github_project: str,
+) -> list[tuple[Path, str]]:
+    repository = repository.resolve(strict=True)
+    assets = Path(__file__).resolve().parents[1] / "assets" / "github-agentic-workflows"
+    destination = ensure_destination(repository)
+    actions = {
+        str(item["path"]): str(item["action"])
+        for item in report["files"]
+        if isinstance(item, dict)
+    }
+    writes: list[tuple[Path, str]] = []
+    for name in WORKFLOW_NAMES:
+        target = destination / name
+        relative = target.relative_to(repository).as_posix()
+        if actions.get(relative) in {
+            "create",
+            "promote_to_live",
+            "migrate_generated",
+        }:
+            writes.append(
+                (
+                    target,
+                    render(
+                        assets / name,
+                        engine,
+                        staged,
+                        ci_branch_pattern,
+                        ci_workflow,
+                        github_project,
+                    ),
+                )
+            )
+    return writes
 
 
 def main() -> int:
@@ -325,6 +685,8 @@ def main() -> int:
         help="After applying, run the installed `gh aw compile --strict` command.",
     )
     args = parser.parse_args()
+    if args.compile and not args.apply:
+        parser.error("--compile requires --apply")
 
     root = git_root(Path(args.repository).resolve())
     if root is None:
@@ -332,73 +694,89 @@ def main() -> int:
         return 2
 
     try:
-        report = plan(
-            root,
-            args.engine,
-            not args.live,
-            args.ci_branch_pattern,
-            args.ci_workflow,
-            args.github_project,
-        )
-    except UnsafeDestinationError as error:
-        print(json.dumps({"reason": "unsafe_destination", "detail": str(error)}, ensure_ascii=False, indent=2))
-        return 6
-    if report["conflicts"]:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        return 3
-    if report["blocked"]:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        return 5
-
-    if args.compile and not args.apply:
-        parser.error("--compile requires --apply")
-
-    if args.apply:
-        assets = Path(__file__).resolve().parents[1] / "assets" / "github-agentic-workflows"
-        try:
-            destination = ensure_destination(root)
-            actions = {item["path"]: item["action"] for item in report["files"]}
-            for name in WORKFLOW_NAMES:
-                target = destination / name
-                relative = target.relative_to(root).as_posix()
-                if actions[relative] in {
-                    "create",
-                    "promote_to_live",
-                    "migrate_generated",
-                }:
-                    validate_destination(root)
-                    atomic_write(
-                        target,
-                        render(
-                            assets / name,
-                            args.engine,
-                            not args.live,
-                            args.ci_branch_pattern,
-                            args.ci_workflow,
-                            args.github_project,
-                        ),
+        with workflow_transaction_lock(root):
+            transaction = workflow_transaction_directory(root)
+            if not args.apply and transaction.exists():
+                print(
+                    json.dumps(
+                        {
+                            "reason": "pending_workflow_transaction",
+                            "detail": "rerun with --apply to recover before planning",
+                        },
+                        ensure_ascii=False,
+                        indent=2,
                     )
-        except UnsafeDestinationError as error:
-            print(
-                json.dumps({"reason": "unsafe_destination", "detail": str(error)}, ensure_ascii=False, indent=2)
+                )
+                return 7
+            recovered_transaction = (
+                recover_workflow_transaction(root) if args.apply else False
             )
-            return 6
+            report = plan(
+                root,
+                args.engine,
+                not args.live,
+                args.ci_branch_pattern,
+                args.ci_workflow,
+                args.github_project,
+            )
+            report["recovered_transaction"] = recovered_transaction
+            if report["conflicts"]:
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+                return 3
+            if report["blocked"]:
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+                return 5
 
-        if args.compile:
-            if shutil.which("gh") is None:
-                print("gh is required for --compile", file=sys.stderr)
-                return 4
-            compiled = subprocess.run(["gh", "aw", "compile", "--strict"], cwd=root, check=False)
-            if compiled.returncode != 0:
-                return compiled.returncode
-        report = plan(
-            root,
-            args.engine,
-            not args.live,
-            args.ci_branch_pattern,
-            args.ci_workflow,
-            args.github_project,
+            if args.apply:
+                writes = rendered_workflow_writes(
+                    root,
+                    report,
+                    args.engine,
+                    not args.live,
+                    args.ci_branch_pattern,
+                    args.ci_workflow,
+                    args.github_project,
+                )
+                apply_workflow_transaction(root, writes)
+
+                if args.compile:
+                    if shutil.which("gh") is None:
+                        print("gh is required for --compile", file=sys.stderr)
+                        return 4
+                    compiled = subprocess.run(
+                        ["gh", "aw", "compile", "--strict"],
+                        cwd=root,
+                        check=False,
+                    )
+                    if compiled.returncode != 0:
+                        return compiled.returncode
+                report = plan(
+                    root,
+                    args.engine,
+                    not args.live,
+                    args.ci_branch_pattern,
+                    args.ci_workflow,
+                    args.github_project,
+                )
+                report["recovered_transaction"] = recovered_transaction
+    except UnsafeDestinationError as error:
+        print(
+            json.dumps(
+                {"reason": "unsafe_destination", "detail": str(error)},
+                ensure_ascii=False,
+                indent=2,
+            )
         )
+        return 6
+    except WorkflowTransactionError as error:
+        print(
+            json.dumps(
+                {"reason": "workflow_transaction_failed", "detail": str(error)},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 7
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0

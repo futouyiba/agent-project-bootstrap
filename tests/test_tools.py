@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -54,6 +55,18 @@ def install_legacy_staged_profile(root: Path) -> None:
             .replace("__CI_WORKFLOW__", json.dumps("CI"))
         )
         (workflows / name).write_text(content, encoding="utf-8")
+
+
+def load_agentic_module():
+    specification = importlib.util.spec_from_file_location(
+        "configure_agentic_workflows_under_test",
+        AGENTIC,
+    )
+    assert specification is not None
+    assert specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+    return module
 
 
 class AuditTests(unittest.TestCase):
@@ -247,6 +260,15 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 all(item["action"] == "unchanged" for item in final_report["files"])
             )
 
+            second = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(second.returncode, 0, second.stderr)
+            second_report = json.loads(second.stdout)
+            self.assertFalse(second_report["recovered_transaction"])
+            self.assertTrue(
+                all(item["action"] == "unchanged" for item in second_report["files"])
+            )
+
     def test_modified_legacy_profile_blocks_migration_without_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -308,6 +330,157 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
                 },
             )
             self.assertFalse((workflows / "agent-reconcile-metadata.yml").exists())
+
+    def test_mid_migration_write_failure_rolls_back_and_retry_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            workflows = root / ".github" / "workflows"
+            before = {
+                path.name: path.read_bytes()
+                for path in workflows.iterdir()
+            }
+            module = load_agentic_module()
+            report = module.plan(root, "codex", True, "**", "CI", GITHUB_PROJECT)
+            writes = module.rendered_workflow_writes(
+                root,
+                report,
+                "codex",
+                True,
+                "**",
+                "CI",
+                GITHUB_PROJECT,
+            )
+            replacements = 0
+
+            def fail_on_second_replacement(source: Path, target: Path) -> None:
+                nonlocal replacements
+                replacements += 1
+                if replacements == 2:
+                    raise OSError("injected migration failure")
+                os.replace(source, target)
+
+            with self.assertRaises(module.WorkflowTransactionError):
+                module.apply_workflow_transaction(
+                    root,
+                    writes,
+                    replace_file=fail_on_second_replacement,
+                )
+
+            self.assertEqual(
+                before,
+                {
+                    path.name: path.read_bytes()
+                    for path in workflows.iterdir()
+                },
+            )
+            self.assertFalse(module.workflow_transaction_directory(root).exists())
+
+            retry = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(retry.returncode, 0, retry.stderr)
+            retry_report = json.loads(retry.stdout)
+            self.assertTrue(
+                all(item["action"] == "unchanged" for item in retry_report["files"])
+            )
+
+    def test_interrupted_migration_is_recovered_before_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            module = load_agentic_module()
+            report = module.plan(root, "codex", True, "**", "CI", GITHUB_PROJECT)
+            writes = module.rendered_workflow_writes(
+                root,
+                report,
+                "codex",
+                True,
+                "**",
+                "CI",
+                GITHUB_PROJECT,
+            )
+            transaction, entries = module.prepare_workflow_transaction(root, writes)
+            first = entries[0]
+            os.replace(
+                transaction / str(first["staged"]),
+                root / ".github" / "workflows" / str(first["name"]),
+            )
+
+            preview = run(agentic_command(root), root)
+
+            self.assertEqual(preview.returncode, 7)
+            self.assertEqual(
+                json.loads(preview.stdout)["reason"],
+                "pending_workflow_transaction",
+            )
+            self.assertTrue(transaction.exists())
+
+            retry = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(retry.returncode, 0, retry.stderr)
+            retry_report = json.loads(retry.stdout)
+            self.assertTrue(retry_report["recovered_transaction"])
+            self.assertTrue(
+                all(item["action"] == "unchanged" for item in retry_report["files"])
+            )
+            self.assertFalse(transaction.exists())
+
+    def test_concurrent_apply_is_rejected_without_repository_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            module = load_agentic_module()
+
+            with module.workflow_transaction_lock(root):
+                result = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(result.returncode, 7)
+            self.assertEqual(
+                json.loads(result.stdout)["reason"],
+                "workflow_transaction_failed",
+            )
+            self.assertFalse((root / ".github").exists())
+
+    def test_interrupted_migration_with_unknown_target_content_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            install_legacy_staged_profile(root)
+            module = load_agentic_module()
+            report = module.plan(root, "codex", True, "**", "CI", GITHUB_PROJECT)
+            writes = module.rendered_workflow_writes(
+                root,
+                report,
+                "codex",
+                True,
+                "**",
+                "CI",
+                GITHUB_PROJECT,
+            )
+            transaction, entries = module.prepare_workflow_transaction(root, writes)
+            first_target = (
+                root / ".github" / "workflows" / str(entries[0]["name"])
+            )
+            os.replace(
+                transaction / str(entries[0]["staged"]),
+                first_target,
+            )
+            first_target.write_text("unexpected concurrent edit\n", encoding="utf-8")
+
+            result = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(result.returncode, 7)
+            self.assertEqual(
+                json.loads(result.stdout)["reason"],
+                "workflow_transaction_failed",
+            )
+            self.assertEqual(
+                first_target.read_text(encoding="utf-8"),
+                "unexpected concurrent edit\n",
+            )
+            self.assertTrue(transaction.exists())
 
     def test_first_install_cannot_enable_live_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
