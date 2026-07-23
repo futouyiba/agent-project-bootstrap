@@ -111,7 +111,7 @@ Set-Location agent-project-bootstrap
 
 你不需要知道 Issue 编号，也不用复述“读取验收标准、建分支、开 PR、更新 In review、不要合并”等长提示。Agent 应先用描述查找：只有一个明显结果就直接采用；多个相近结果只列出最可能的两三个供确认；没有结果时再按仓库授权创建或提出 Issue。
 
-`收尾` 只检查和整理，不授权合并。`合并收尾` 是当前这一次任务的明确合并授权：Agent 重新读取 GitHub，按依赖顺序逐个处理已批准 PR；每次合并后刷新剩余项目；CI、冲突、评审线程或验收条件不满足的项目会被跳过。该授权不包含部署、发布或扩大范围。
+`收尾` 只检查和整理，不授权合并。`合并收尾` 是当前这一次任务的明确合并授权：Agent 重新读取 GitHub，按依赖顺序逐个处理已达到 merge-ready 的 PR；每次合并后刷新剩余项目；CI、冲突、评审线程或验收条件不满足的项目会被跳过。该授权不包含部署、发布或扩大范围。
 
 Codex CLI 和 IDE 扩展还可以输入：
 
@@ -177,50 +177,62 @@ Codex Automation 目前主要是定时心跳，不是 GitHub webhook；本地执
 
 如果目标是不再由人把“实现完成—请审查—还要修改—CI 已通过”粘贴到不同对话，可以为单个仓库启用 [GitHub Agentic Workflows (`gh-aw`)](https://github.com/github/gh-aw) profile。它在 GitHub Actions 中启动独立的无界面 agent run，不会给桌面端任务发送 Steer，也不会打断 ChatGPT/Codex 当前对话。
 
-本项目提供四个角色，但仍然只有一个调度者：
+本项目提供四个 Agent 角色和一个无 AI 的确定性元数据 workflow，但仍然只有一个调度者：
 
 ```text
 GitHub 事件/30 分钟兜底心跳
              ↓
       agent-supervisor
-       ↙      ↓      ↘
- 实现/返工   独立审查   合并就绪核验
-    ↓          ↓           ↓
+    ↙       ↓         ↓          ↘
+元数据修复  实现/返工   独立审查   合并就绪核验
+    ↓       ↓          ↓           ↓
  Issue、PR、Review、CI（共同事实来源）
 ```
 
 - `agent-supervisor`：只路由带 `agent:managed` 的事项；
+- `agent-reconcile-metadata`：不运行 Agent，只为精确 PR 修复 Ready 和关联 Issue 的 `In review` 状态；
 - `agent-implement`：创建 Issue 关联 PR，或在同一 PR 分支修复；
 - `agent-review`：独立审查，留下 `VERDICT: MERGE_READY` 或阻塞意见；
 - `agent-integrate`：重新核对当前 head、CI、依赖和评论，但**不执行合并**。
 
+独立审查者在同一次实质审查中留下最终评审信号，不再另派一个只负责重复结论或点击 `Approve` 的 Agent。只有仓库 ruleset、分支保护或明确记录的政策要求另一个 GitHub 身份批准时，那项平台 Approval 才作为单独门禁保留。
+
 它不是安装全局 Skill 后自动开启的。每个仓库都要先做只读计划（安装到 Claude Code 时，把下文脚本路径中的 `~/.codex` 替换为 `~/.claude`，PowerShell 把 `$HOME/.codex` 替换为 `$HOME/.claude`）：
 
 ```sh
-python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py \
+  /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1
 ```
 
 确认后只安装预演版：
 
 ```sh
-python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py /path/to/repository --engine codex --apply
+python3 ~/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py \
+  /path/to/repository \
+  --engine codex \
+  --github-project https://github.com/orgs/example/projects/1 \
+  --apply
 gh aw compile --strict
 ```
 
 Windows PowerShell 对应使用：
 
 ```powershell
-python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py" C:\path\to\repository --engine codex --apply
+python "$HOME/.codex/skills/agent-project-bootstrap/scripts/configure_agentic_workflows.py" C:\path\to\repository --engine codex --github-project https://github.com/orgs/example/projects/1 --apply
 gh aw compile --strict
 ```
 
 模板目前使用官方 `gh-aw v0.82.14` 做过严格编译验证。首次编译会把新增的 engine secrets 和 Actions 列为 safe-update 安全审查项；逐项检查并在 PR 中记录理由后，再执行 `gh aw compile --strict --approve`。安装脚本不会替你静默批准。CI 完成事件默认匹配所有 PR head 分支，但只接受由 `pull_request` 触发的目标 CI；可以用 `--ci-branch-pattern` 收紧分支 glob，用 `--ci-workflow` 指定准确的 workflow 名称。
 
-第一次生成的 workflow 强制使用 `staged: true`：即使同时传入 `--live --apply`，工具也会拒绝首次安装。它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`；只有四个现有文件与工具生成的 staged 版本逐字一致时，升级才会受控执行，任何人工修改都会作为冲突保留。
+第一次生成的 workflow 强制使用 `staged: true`：即使同时传入 `--live --apply`，工具也会拒绝首次安装。它会在 Actions Summary 展示拟评论、拟打标签、拟创建 PR 和拟派发的 worker，但不真正写入 GitHub。必须在真实 Issue、PR、review 和 CI 上验证过路由、权限、费用和 prompt-injection 边界，才能另开一次变更使用 `--live`；只有五个现有文件与工具生成的 staged 版本逐字一致时，升级才会受控执行，任何人工修改都会作为冲突保留。
+
+configurator 能识别受支持旧版本生成且未修改的 staged profile。默认模式先只读展示 `migrate_generated`，加 `--apply` 后才原子迁移并补齐新增 workflow；任何被人工编辑的旧文件仍返回冲突。旧 live profile 不会被静默重写，也不能在迁移时同时启用 `--live`，必须先迁移并验证新的 staged profile。
 
 安装器还会拒绝 `.github`、`.github/workflows` 或目标 workflow 文件中的符号链接，防止仓库内路径把写入重定向到仓库外部。
 
-Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
+Codex engine 需要把 `OPENAI_API_KEY` 配置为 GitHub Actions secret；ChatGPT 订阅不能替代 API Key。主管本身没有 Project 写工具或凭据；它只能向无 AI 的 `agent-reconcile-metadata` workflow 提交精确 PR 编号。该 workflow 确定性验证 `agent:managed`、唯一的同仓库托管关联 Issue、固定 Project URL、既有 Issue item 和 `In review` 选项后才写入，因此还要配置独立的 `GH_AW_WRITE_PROJECT_TOKEN`：使用只覆盖目标 Project 和仓库的最小权限 PAT 或 GitHub App token，默认 `GITHUB_TOKEN` 无法写入 Projects v2。还需要创建 `agent:managed`、`agent:needs-review`、`agent:needs-rework`、`agent:merge-ready` 和 `needs:human` 五个机器路由标签。它们不是 Project 状态的第二份副本。每次返工会在 PR 记录 `AGENT-CYCLE:` 证据；同一阻塞条件累计三次失败后停止自动派发并升级给人。
 
 Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation job 查询精确的 Issue/PR 编号、类型和 `agent:managed` 标签；AI 结束后、任何 safe output 写入前还会再次检查。所有 worker 写入固定到传入编号，支持标签门禁的 handler 同时配置 `required-labels: [agent:managed]`。因此仓库正文或评论中的 prompt injection 不能自行把未托管事项加入执行范围。
 
@@ -234,12 +246,14 @@ Worker 不依赖提示词判断托管范围：AI 启动前会由 pre-activation 
 
 Agent 负责需要语义判断的工作：理解自然语言、搜索和消歧 Issue、判断需求是否明确、实现与总结。GitHub Project 的内置 workflow 负责确定性动作：匹配的 Issue 自动进入 Project、Issue 或 draft intake 默认进入 `Backlog`、Issue 关闭后进入 `Done`。PR 默认只作为 Issue 的关联交付记录，不作为第二个 Project 条目。
 
+这里严格区分 Issue/Project 状态与 PR 阶段：`Ready for review` 只属于 PR。Draft 只表示工作尚未完成或主动征求早期反馈；实现范围和规定的自测一完成，就应创建非 Draft PR 或立即转为 Ready，不等待审查或批准。该规则覆盖通用 GitHub 发布工具的“默认 Draft”习惯。PR 仍为 Draft 时，关联 Issue 保持 `In progress`；PR 转为非 Draft 并正式请求审查时，Issue 同步进入 `In review`。当前提交上的独立评审信号、CI、冲突和是否可合并直接读取 PR，不再复制成 Issue 状态。遗漏的纯元数据转换由 GitHub workflow 或单一托管主管纠正，不把任务退回实现者；只有代码、测试、冲突、评审问题或验收证据需要变化时才重新唤醒实现者。
+
 推荐在每个 Project 的 **Workflows** 页面配置：
 
 1. `Auto-add to project`：只筛选目标仓库的 Issues；
 2. `Item added to project`：只把 Issue/draft intake 的 Status 设为 `Backlog`；
 3. `Issue closed`：Status 设为 `Done`；
-4. 如果团队明确选择同时追踪 PR，PR 加入时直接设为 `In review`，合并后再设为 `Done`。
+4. 如果团队明确选择同时追踪 PR，只在 PR 转为非 Draft 并正式 Ready for review 时加入或设为 `In review`，合并后再设为 `Done`。
 
 GitHub 套餐、Project 类型和权限会影响可用 workflow。Bootstrap 会先检测；能通过已连接工具可靠配置时才执行，否则输出准确的网页操作清单并把状态记为 pending，不会假装已经配置好。
 
@@ -319,7 +333,7 @@ Backlog 是“尚未承诺立即执行的候选工作集合”，不是另一种
 信息补齐并排定 → Ready
 有人开始做 → In progress
 受依赖阻塞 → Blocked
-进入 PR → In review
+PR Ready for review → In review
 合并且验收完成 → Done
 ```
 

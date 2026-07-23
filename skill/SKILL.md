@@ -63,10 +63,22 @@ Installing this skill does not create a Project or enable workflows. During boot
 
 1. Detect the repository's existing Project and workflows.
 2. Propose the minimal statuses `Backlog`, `Ready`, `In progress`, `Blocked`, `In review`, and `Done`.
-3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them directly to `In review` and move merged PRs to `Done`.
+3. With authorization and supported GitHub tools, configure deterministic automation: matching Issues are added, Issue or draft intake enters `Backlog`, and closed Issues enter `Done`. Keep PRs as linked delivery records by default; if the repository deliberately tracks PRs as Project items, add them or move them to `In review` only when they become non-draft and ready for formal review, then move merged PRs to `Done`.
 4. If the available tools cannot configure a setting, give the exact GitHub UI checklist and record it as pending rather than claiming success.
 
 After successful setup, create or update `.codex/agent-project-bootstrap.yml` with `version`, `profile`, `task_system`, `workflow_mode`, `github_project`, `github_project_automation`, `managed_mode`, `github_agentic_workflows`, and `initialized_at`. This marker records configuration, not task state. Keep mutable retries, decisions, and delivery state in the linked Issue or PR.
+
+### Keep Issue and PR states distinct
+
+- Treat `Ready for review` as a pull-request stage only. Do not add or require it as an Issue or Project status; use `In review` for the linked Issue.
+- Keep the Issue `In progress` while its PR is a draft. When the PR becomes non-draft and ready for formal review, move the linked Issue to `In review` in the same handoff.
+- Treat Draft readiness and merge readiness as separate decisions. Exit Draft when the scoped implementation and validation are complete enough for a reviewer to decide; do not require a repository-approved review signal, external approval, or successful merge-gate result first, because those are downstream evidence collected after formal review begins.
+- Draft is only for genuinely incomplete work or intentionally early feedback. In this workflow, the rule above overrides any generic publishing tool's draft-by-default convention: if implementation and scoped validation are already complete when the PR is created, create it non-draft or mark it ready immediately without waiting for review or approval.
+- Classify every blocker as an implementation/acceptance defect, evidence gap, metadata lag, external authorization, or dependency/baseline change. Return work to implementation only for the first class or for a real code conflict; repair metadata directly, collect missing evidence at the appropriate stage, and report external gates without describing the code as defective.
+- Reject circular state rules. If a review signal, external approval, or gate can only be satisfied on a non-draft PR, mark the completed PR ready, request that evidence, and keep merge blocked until it arrives.
+- Drive routine state transitions from observable GitHub events. The first authorized agent or the repository's single supervisor that observes a missed transition should reconcile it idempotently; never send work back to the implementer solely to edit metadata.
+- Once the repository-approved current-head review signal and CI gates pass, hand the PR to the integrator or configured auto-merge policy. Return it to implementation only for code, tests, conflicts, unresolved review findings, or unmet acceptance criteria.
+- The independent reviewer that performs the substantive review should also publish the repository-approved final review signal. Do not create a second approver-only Agent merely to repeat the conclusion or click `Approve`; require a distinct GitHub approval identity only when repository rules or the platform explicitly configure it as a separate gate.
 
 ## Daily-flow mode
 
@@ -98,6 +110,7 @@ Read [managed autopilot](references/managed-autopilot.md) completely before enab
 - Use one durable supervisor task per repository or explicitly bounded goal. Do not create separate human-relayed implementation, review, and merge chats.
 - On each wake-up, refresh GitHub and continue the selected goal through routine implementation, review feedback, CI repair, and re-review cycles.
 - Treat GitHub as the mailbox and source of truth. Do not depend on the user copying messages between agents.
+- Reconcile Issue, Project, and PR state from current GitHub evidence. Do not dispatch an implementer merely to mark a PR ready, move an Issue to `In review`, or perform another metadata-only handoff when the supervisor is authorized to do it.
 - Use a recurring Codex Automation as a heartbeat when available. Claude Code has no equivalent built-in heartbeat, so use an external scheduler or the optional GitHub Agentic Workflows layer instead. Do not claim a scheduled task is an event webhook or that it runs while the required local client is offline.
 - Prefer GitHub built-in workflows, required checks, automatic Codex review, and repository auto-merge for deterministic transitions. Use GitHub Agentic Workflows only as an explicit opt-in event-driven execution layer because it requires an engine credential, Actions minutes/cost, generated lock files, and a deliberate threat model.
 - Stop and ask at the repository's human gates or after the configured retry limit. Record the blocker on the Issue or PR before escalating once.
@@ -107,8 +120,8 @@ Read [managed autopilot](references/managed-autopilot.md) completely before enab
 
 When the repository explicitly adopts GitHub Agentic Workflows:
 
-1. Run `python3 scripts/configure_agentic_workflows.py [repository]` for a read-only plan.
-2. Show the exact workflow source files, engine secret name, routing labels, schedule, cost limits, and rollout state.
+1. Run `python3 scripts/configure_agentic_workflows.py [repository] --github-project [exact-project-url]` for a read-only plan.
+2. Show the exact workflow source files, engine and Project-write secret names, routing labels, schedule, cost limits, and rollout state.
 3. Start with `--apply` in staged mode. The configurator rejects a first-time `--live --apply`; later promotion is allowed only when all generated files still exactly match its staged profile.
 4. Compile with a pinned supported `gh-aw` release using `gh aw compile --strict`; commit both Markdown sources and generated lock files.
 5. Verify staged runs on representative Issue, PR, review, and CI events before proposing live safe outputs.
@@ -122,7 +135,7 @@ Once a task is clearly selected and repository policy adopts this workflow, the 
 - move the selected item from `Ready` to `In progress`;
 - create its task branch;
 - create and link a PR;
-- move it to `In review`;
+- mark the PR ready for formal review and move the linked Issue to `In review` when implementation evidence is complete;
 - record validation results.
 
 Ask before:

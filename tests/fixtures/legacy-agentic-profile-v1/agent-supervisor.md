@@ -33,12 +33,6 @@ permissions:
   pull-requests: read
   statuses: read
 
-network:
-  allowed:
-    - defaults
-    # gh-aw routes MCP requests through the host-published gateway.
-    - host.docker.internal
-
 engine: __ENGINE__
 timeout-minutes: 15
 max-ai-credits: 25
@@ -50,19 +44,19 @@ concurrency:
 safe-outputs:
   staged: __STAGED__
   dispatch-workflow:
-    workflows: [agent-implement, agent-review, agent-integrate, agent-reconcile-metadata]
+    workflows: [agent-implement, agent-review, agent-integrate]
     max: 3
   add-comment:
     target: "*"
     required-labels: [agent:managed]
     max: 2
   add-labels:
-    allowed: [agent:needs-review, agent:needs-rework, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
   remove-labels:
-    allowed: [agent:needs-review, agent:needs-rework, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
@@ -80,9 +74,6 @@ or merge.
 
 Choose at most one next role for each item and dispatch no more than three total:
 
-- `agent-reconcile-metadata` for a managed PR whose implementation and scoped
-  validation are complete but which is still Draft or whose linked Issue has
-  not reached `In review`;
 - `agent-implement` for a clear Issue with acceptance criteria and no active PR,
   or for an active managed PR with actionable review/CI feedback;
 - `agent-review` for a managed non-draft PR whose current head needs independent
@@ -101,15 +92,6 @@ the final review signal in the same pass. Never dispatch an approver-only role
 unless repository or platform policy explicitly requires a distinct GitHub
 approval identity.
 
-For completed draft work or a lagging linked Issue, dispatch
-`agent-reconcile-metadata` with the exact PR number. That non-agent workflow
-independently requires the managed label, exactly one same-repository managed
-closing Issue, the configured Project, an existing Issue item, and the exact
-`Status: In review` option before it writes. It marks the PR ready and updates
-only that resolved Issue item; it cannot accept an Agent-supplied Project URL or
-Issue number. If those deterministic gates fail, do not guess or dispatch
-implementation: add `needs:human` and state the missing configuration.
-
 Pass `item_number`, `item_kind` (`issue` or `pull_request`), and a concise
 `reason`. Prefer resuming active PRs before selecting new Issues. Do not dispatch
 duplicate work when a run is already active. If a PR already has current-head
@@ -117,9 +99,6 @@ merge-readiness evidence and still carries `agent:merge-ready`, treat it as a
 terminal handoff and do nothing until its head or GitHub gate state changes. If
 an item already carries `needs:human`, do not repeat the escalation or
 dispatch work until a new authorized human response resolves the recorded gate.
-After verifying that response resolves the exact recorded gate, remove only
-`needs:human` before resuming normal routing; do not clear it merely because a
-new comment or event arrived.
 Count completed implementation/review/CI repair cycles from PR comments, reviews,
 workflow runs, and head SHAs. After three failed cycles for the same blocking
 condition, stop dispatching workers. If product scope, security, cost, data

@@ -42,12 +42,6 @@ permissions:
   pull-requests: read
   statuses: read
 
-network:
-  allowed:
-    - defaults
-    # gh-aw routes MCP requests through the host-published gateway.
-    - host.docker.internal
-
 engine: __ENGINE__
 timeout-minutes: 15
 max-ai-credits: 30
