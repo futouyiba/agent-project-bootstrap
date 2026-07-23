@@ -1307,6 +1307,12 @@ class SkillContractTests(unittest.TestCase):
         integrate_prompt = (REPOSITORY / "prompts" / "integrate.md").read_text(
             encoding="utf-8"
         )
+        claude_template = (REPOSITORY / "templates" / "CLAUDE.project.md").read_text(
+            encoding="utf-8"
+        )
+        claude_integrate_command = (
+            REPOSITORY / "commands" / "integrate.md"
+        ).read_text(encoding="utf-8")
 
         for content in (skill, daily_flow, supervisor, template, posix_installer, powershell_installer):
             self.assertIn("without waiting for review or approval", content)
@@ -1314,8 +1320,10 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("supervisor that observes the lag repairs it directly", managed)
         self.assertIn("repository-approved current-head review signal", integrate_prompt)
         self.assertNotIn("all required approvals", integrate_prompt)
+        self.assertIn("repository-approved current-head review signal", claude_integrate_command)
+        self.assertNotIn("all required approvals", claude_integrate_command)
 
-        for content in (skill, daily_flow, managed, supervisor, template):
+        for content in (skill, daily_flow, managed, supervisor, template, claude_template):
             self.assertIn("approver-only Agent", content)
         self.assertIn("approver-only role", event_supervisor)
 
@@ -1334,6 +1342,7 @@ class SkillContractTests(unittest.TestCase):
             supervisor,
             event_supervisor,
             template,
+            claude_template,
             posix_installer,
             powershell_installer,
         ):
