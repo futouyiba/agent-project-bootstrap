@@ -112,44 +112,87 @@ jobs:
           )"
           test "$(jq -r '.url' <<<"$project_json")" = __GITHUB_PROJECT__
 
-          item_json="$(
-            gh project item-list "$PROJECT_NUMBER" \
-              --owner "$PROJECT_OWNER" \
-              --limit 1000 \
-              --format json
+          owner_type="$(gh api "users/$PROJECT_OWNER" --jq '.type')"
+          case "$owner_type" in
+            User)
+              project_query='user(login: $owner) { project: projectV2(number: $projectNumber) {'
+              ;;
+            Organization)
+              project_query='organization(login: $owner) { project: projectV2(number: $projectNumber) {'
+              ;;
+            *)
+              echo "unsupported Project owner type: $owner_type" >&2
+              exit 1
+              ;;
+          esac
+
+          item_pages="$(
+            gh api graphql --paginate \
+              -f query="query(\$owner: String!, \$projectNumber: Int!, \$endCursor: String) {
+                $project_query
+                  items(first: 100, after: \$endCursor) {
+                    nodes {
+                      id
+                      content {
+                        ... on Issue {
+                          number
+                          repository { nameWithOwner }
+                        }
+                      }
+                    }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                } }
+              }" \
+              -f owner="$PROJECT_OWNER" \
+              -F projectNumber="$PROJECT_NUMBER"
           )"
           item="$(
-            jq -ce \
+            jq -sce \
               --arg repository "$GITHUB_REPOSITORY" \
               --argjson number "$ISSUE_NUMBER" '
                 [
-                  .items[]
-                  | select(.content.type == "Issue")
-                  | select(.content.repository == $repository)
+                  .[]
+                  | (.data.user.project? // .data.organization.project?).items.nodes[]
+                  | select(.content.repository.nameWithOwner == $repository)
                   | select(.content.number == $number)
                 ]
                 | if length == 1 then .[0]
                   else error("expected exactly one configured Project item for the linked Issue")
                   end
-              ' <<<"$item_json"
+              ' <<<"$item_pages"
           )"
 
-          fields_json="$(
-            gh project field-list "$PROJECT_NUMBER" \
-              --owner "$PROJECT_OWNER" \
-              --format json
+          field_pages="$(
+            gh api graphql --paginate \
+              -f query="query(\$owner: String!, \$projectNumber: Int!, \$endCursor: String) {
+                $project_query
+                  fields(first: 100, after: \$endCursor) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options { id name }
+                      }
+                    }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                } }
+              }" \
+              -f owner="$PROJECT_OWNER" \
+              -F projectNumber="$PROJECT_NUMBER"
           )"
           status_field="$(
-            jq -ce '
+            jq -sce '
               [
-                .fields[]
+                .[]
+                | (.data.user.project? // .data.organization.project?).fields.nodes[]
                 | select(.name == "Status")
-                | select(.type == "ProjectV2SingleSelectField")
               ]
               | if length == 1 then .[0]
                 else error("expected exactly one single-select Status field")
                 end
-            ' <<<"$fields_json"
+            ' <<<"$field_pages"
           )"
           option_id="$(
             jq -er '
@@ -164,11 +207,6 @@ jobs:
           echo "item_id=$(jq -r '.id' <<<"$item")" >>"$GITHUB_OUTPUT"
           echo "field_id=$(jq -r '.id' <<<"$status_field")" >>"$GITHUB_OUTPUT"
           echo "option_id=$option_id" >>"$GITHUB_OUTPUT"
-          if test "$(jq -r '.status // ""' <<<"$item")" = "In review"; then
-            echo "needs_update=false" >>"$GITHUB_OUTPUT"
-          else
-            echo "needs_update=true" >>"$GITHUB_OUTPUT"
-          fi
 
       - name: Mark managed PR ready for review
         if: steps.target.outputs.is_draft == 'true'
@@ -179,7 +217,6 @@ jobs:
         run: gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
 
       - name: Move linked Issue to In review
-        if: steps.project.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_AW_WRITE_PROJECT_TOKEN }}
           FIELD_ID: ${{ steps.project.outputs.field_id }}
