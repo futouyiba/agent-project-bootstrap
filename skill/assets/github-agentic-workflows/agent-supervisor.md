@@ -51,12 +51,12 @@ safe-outputs:
     required-labels: [agent:managed]
     max: 2
   add-labels:
-    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework, needs:human]
     target: "*"
     required-labels: [agent:managed]
     max: 3
   remove-labels:
-    allowed: [agent:needs-review, agent:needs-rework, agent:merge-ready, needs:human]
+    allowed: [agent:needs-review, agent:needs-rework]
     target: "*"
     required-labels: [agent:managed]
     max: 3

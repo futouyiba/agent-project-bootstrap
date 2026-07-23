@@ -568,6 +568,12 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("AGENT-CYCLE:", implementer)
         self.assertIn("needs:human", supervisor)
         self.assertEqual(supervisor.count("required-labels: [agent:managed]"), 4)
+        self.assertIn(
+            "allowed: [agent:needs-review, agent:needs-rework, needs:human]",
+            supervisor,
+        )
+        self.assertIn("allowed: [agent:needs-review, agent:needs-rework]", supervisor)
+        self.assertNotIn("agent:merge-ready, needs:human]", supervisor)
         self.assertIn("github.event.workflow_run.event == 'pull_request'", supervisor)
         self.assertIn("branches: [__CI_BRANCH_PATTERN__]", supervisor)
         self.assertIn("create-pull-request", implementer)
