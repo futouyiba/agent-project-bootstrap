@@ -42,16 +42,7 @@ permissions:
   pull-requests: read
   statuses: read
 
-engine:
-  id: codex
-  env:
-    OPENAI_BASE_URL: https://api.deepseek.com/v1
-model: deepseek-chat
-network:
-  allowed:
-    - defaults
-    - github
-    - api.deepseek.com
+engine: claude
 timeout-minutes: 15
 max-ai-credits: 30
 

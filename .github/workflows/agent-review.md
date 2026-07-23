@@ -46,16 +46,7 @@ checkout:
   fetch: ["refs/pull/*/head"]
   fetch-depth: 0
 
-engine:
-  id: codex
-  env:
-    OPENAI_BASE_URL: https://api.deepseek.com/v1
-model: deepseek-chat
-network:
-  allowed:
-    - defaults
-    - github
-    - api.deepseek.com
+engine: claude
 timeout-minutes: 25
 max-ai-credits: 60
 
