@@ -5,11 +5,13 @@ repository_slug="futouyiba/agent-project-bootstrap"
 repository_ref="main"
 source_dir=""
 codex_root="${CODEX_HOME:-${HOME}/.codex}"
+claude_root="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+target="codex"
 with_global_rule=0
 temporary_dir=""
 
 usage() {
-  printf '%s\n' "Usage: install.sh [--source PATH] [--codex-home PATH] [--with-global-rule]"
+  printf '%s\n' "Usage: install.sh [--source PATH] [--target codex|claude] [--codex-home PATH] [--claude-home PATH] [--with-global-rule]"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -18,8 +20,16 @@ while [ "$#" -gt 0 ]; do
       source_dir="${2:?--source requires a path}"
       shift 2
       ;;
+    --target)
+      target="${2:?--target requires codex or claude}"
+      shift 2
+      ;;
     --codex-home)
       codex_root="${2:?--codex-home requires a path}"
+      shift 2
+      ;;
+    --claude-home)
+      claude_root="${2:?--claude-home requires a path}"
       shift 2
       ;;
     --with-global-rule)
@@ -37,6 +47,29 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+case "$target" in
+  codex)
+    install_root="$codex_root"
+    command_dir_name="prompts"
+    command_source_relative="prompts/integrate.md"
+    global_rules_file="AGENTS.md"
+    integrate_command="/prompts:integrate"
+    repo_rules_file="AGENTS.md"
+    ;;
+  claude)
+    install_root="$claude_root"
+    command_dir_name="commands"
+    command_source_relative="commands/integrate.md"
+    global_rules_file="CLAUDE.md"
+    integrate_command="/integrate"
+    repo_rules_file="CLAUDE.md"
+    ;;
+  *)
+    printf 'Unknown target: %s (expected codex or claude)\n' "$target" >&2
+    exit 2
+    ;;
+esac
 
 cleanup() {
   if [ -n "$temporary_dir" ] && [ -d "$temporary_dir" ]; then
@@ -64,14 +97,19 @@ else
 fi
 
 skill_source="$package_root/skill"
-prompt_source="$package_root/prompts/integrate.md"
+command_source="$package_root/$command_source_relative"
 
-if [ ! -f "$skill_source/SKILL.md" ] || [ ! -f "$skill_source/agents/openai.yaml" ] || [ ! -f "$prompt_source" ]; then
+# Source validity: a shared SKILL.md plus the target client's required files.
+if [ ! -f "$skill_source/SKILL.md" ] || [ ! -f "$command_source" ]; then
   printf 'Invalid source: expected an installable skill at %s\n' "$skill_source" >&2
   exit 1
 fi
+if [ "$target" = "codex" ] && [ ! -f "$skill_source/agents/openai.yaml" ]; then
+  printf 'Invalid source: codex target requires %s\n' "$skill_source/agents/openai.yaml" >&2
+  exit 1
+fi
 
-skills_root="$codex_root/skills"
+skills_root="$install_root/skills"
 destination="$skills_root/agent-project-bootstrap"
 mkdir -p "$skills_root"
 
@@ -84,47 +122,47 @@ fi
 cp -R "$skill_source" "$destination"
 printf 'Installed agent-project-bootstrap to %s\n' "$destination"
 
-prompts_root="$codex_root/prompts"
-prompt_destination="$prompts_root/integrate.md"
-mkdir -p "$prompts_root"
-if [ -f "$prompt_destination" ] && ! cmp -s "$prompt_source" "$prompt_destination"; then
-  prompt_backup="$prompt_destination.backup.$(date +%Y%m%d%H%M%S).$$"
-  cp "$prompt_destination" "$prompt_backup"
-  printf 'Existing integrate prompt backed up to %s\n' "$prompt_backup"
+command_root="$install_root/$command_dir_name"
+command_destination="$command_root/integrate.md"
+mkdir -p "$command_root"
+if [ -f "$command_destination" ] && ! cmp -s "$command_source" "$command_destination"; then
+  command_backup="$command_destination.backup.$(date +%Y%m%d%H%M%S).$$"
+  cp "$command_destination" "$command_backup"
+  printf 'Existing %s shortcut backed up to %s\n' "$integrate_command" "$command_backup"
 fi
-cp "$prompt_source" "$prompt_destination"
-printf 'Installed global /prompts:integrate shortcut to %s\n' "$prompt_destination"
+cp "$command_source" "$command_destination"
+printf 'Installed global %s shortcut to %s\n' "$integrate_command" "$command_destination"
 
 if [ "$with_global_rule" -eq 1 ]; then
-  agents_file="$codex_root/AGENTS.md"
-  mkdir -p "$codex_root"
-  touch "$agents_file"
-  agents_temp="$(mktemp)"
-  start_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:start -->/, "&") } END { print count + 0 }' "$agents_file")"
-  end_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:end -->/, "&") } END { print count + 0 }' "$agents_file")"
+  rules_file="$install_root/$global_rules_file"
+  mkdir -p "$install_root"
+  touch "$rules_file"
+  rules_temp="$(mktemp)"
+  start_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:start -->/, "&") } END { print count + 0 }' "$rules_file")"
+  end_count="$(awk '{ count += gsub(/<!-- agent-project-bootstrap:end -->/, "&") } END { print count + 0 }' "$rules_file")"
   if [ "$start_count" -eq 1 ] && [ "$end_count" -eq 1 ]; then
-    if ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:start -->[[:space:]]*$' "$agents_file" ||
-      ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:end -->[[:space:]]*$' "$agents_file"; then
-      rm -f "$agents_temp"
-      printf 'Refusing to update %s: managed block markers must be on their own lines.\n' "$agents_file" >&2
+    if ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:start -->[[:space:]]*$' "$rules_file" ||
+      ! grep -q '^[[:space:]]*<!-- agent-project-bootstrap:end -->[[:space:]]*$' "$rules_file"; then
+      rm -f "$rules_temp"
+      printf 'Refusing to update %s: managed block markers must be on their own lines.\n' "$rules_file" >&2
       exit 1
     fi
-    start_line="$(grep -n '<!-- agent-project-bootstrap:start -->' "$agents_file" | cut -d: -f1)"
-    end_line="$(grep -n '<!-- agent-project-bootstrap:end -->' "$agents_file" | cut -d: -f1)"
+    start_line="$(grep -n '<!-- agent-project-bootstrap:start -->' "$rules_file" | cut -d: -f1)"
+    end_line="$(grep -n '<!-- agent-project-bootstrap:end -->' "$rules_file" | cut -d: -f1)"
     if [ "$start_line" -ge "$end_line" ]; then
-      rm -f "$agents_temp"
-      printf 'Refusing to update %s: managed block markers are out of order.\n' "$agents_file" >&2
+      rm -f "$rules_temp"
+      printf 'Refusing to update %s: managed block markers are out of order.\n' "$rules_file" >&2
       exit 1
     fi
-    sed '/<!-- agent-project-bootstrap:start -->/,/<!-- agent-project-bootstrap:end -->/d' "$agents_file" >"$agents_temp"
+    sed '/<!-- agent-project-bootstrap:start -->/,/<!-- agent-project-bootstrap:end -->/d' "$rules_file" >"$rules_temp"
   elif [ "$start_count" -eq 0 ] && [ "$end_count" -eq 0 ]; then
-    cp "$agents_file" "$agents_temp"
+    cp "$rules_file" "$rules_temp"
   else
-    rm -f "$agents_temp"
-    printf 'Refusing to update %s: managed block markers are incomplete or duplicated.\n' "$agents_file" >&2
+    rm -f "$rules_temp"
+    printf 'Refusing to update %s: managed block markers are incomplete or duplicated.\n' "$rules_file" >&2
     exit 1
   fi
-  cat >>"$agents_temp" <<'EOF'
+  cat >>"$rules_temp" <<'EOF'
 
 <!-- agent-project-bootstrap:start -->
 ## Agent Project Workflow
@@ -134,18 +172,25 @@ if [ "$with_global_rule" -eq 1 ]; then
 - Do not create bootstrap files until the user authorizes the proposed scope.
 - Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
 - Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管` as shortcuts for the `agent-project-bootstrap` flow. Bare `托管` means the current repository and current explicit goal, active Issue, or active PR; ask only when that scope is ambiguous.
-- Treat an explicit `合并收尾` request or the expanded `/prompts:integrate` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
+- Treat an explicit `合并收尾` request or the expanded `__INTEGRATE_COMMAND__` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
 - When repository policy enables managed mode, use one durable supervisor to refresh GitHub on each scheduled wake-up and continue routine review/CI handoffs without asking the user to relay messages. Automatic merge still requires the repository's explicit standing policy.
 - When the user requests true GitHub event-driven handoffs, use the Skill's GitHub Agentic Workflows profile. It is repository-scoped, opt-in, and staged on first installation; the global rule never enables workflows, secrets, live writes, or merge.
-- Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `AGENTS.md`; repository rules take precedence.
+- Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `__REPO_RULES_FILE__`; repository rules take precedence.
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 EOF
-  cp "$agents_temp" "$agents_file"
-  rm -f "$agents_temp"
-  printf 'Added or updated the optional global project-workflow rule in %s\n' "$agents_file"
+  rules_final="$(mktemp)"
+  sed -e "s|__INTEGRATE_COMMAND__|$integrate_command|g" -e "s|__REPO_RULES_FILE__|$repo_rules_file|g" "$rules_temp" >"$rules_final"
+  cp "$rules_final" "$rules_file"
+  rm -f "$rules_temp" "$rules_final"
+  printf 'Added or updated the optional global project-workflow rule in %s\n' "$rules_file"
 fi
 
-printf '%s\n' "Restart ChatGPT/Codex if the skill does not appear immediately."
-printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap in Codex."
-printf '%s\n' "In Codex CLI/IDE, use /prompts:integrate for the deprecated custom-prompt shortcut."
+if [ "$target" = "claude" ]; then
+  printf '%s\n' "Restart Claude Code if the skill does not appear immediately."
+  printf '%s\n' "In Claude Code the agent-project-bootstrap skill is available automatically; describe the work directly, or run /integrate to merge approved PRs."
+else
+  printf '%s\n' "Restart ChatGPT/Codex if the skill does not appear immediately."
+  printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap in Codex."
+  printf '%s\n' "In Codex CLI/IDE, use /prompts:integrate for the deprecated custom-prompt shortcut."
+fi

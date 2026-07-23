@@ -28,8 +28,8 @@ In the Project, open the menu and choose **Workflows**. Configure, when availabl
 
 GitHub plan limits and available triggers can differ. Verify the saved workflow and run one real Issue/PR through it. Transitions such as `In progress` and `In review` normally remain agent actions unless a repository-specific Action or API integration is deliberately added.
 
-Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
+Codex recurring Automations are scheduled supervisor heartbeats, not Project workflows or GitHub webhooks. Codex automatic review writes review findings to PRs; Claude Code users rely on external review tooling or the GitHub Agentic Workflows reviewer. GitHub auto-merge or a merge queue performs the final merge only after branch requirements pass. Keep these responsibilities separate so a failure has one observable owner.
 
 ## Recording the result
 
-Store the Project URL, exact status spelling, and any pending automation in repository `AGENTS.md` and `.codex/agent-project-bootstrap.yml`. Do not put these repository-specific values in the user's global `AGENTS.md`.
+Store the Project URL, exact status spelling, and any pending automation in repository `AGENTS.md` (Codex/ChatGPT) or `CLAUDE.md` (Claude Code) and `.codex/agent-project-bootstrap.yml`. Do not put these repository-specific values in the user's global instruction file.

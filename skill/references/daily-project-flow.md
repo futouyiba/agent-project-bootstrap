@@ -65,7 +65,7 @@ For `收需求`, first normalize candidate items, search for duplicates, and cla
 
 ## Integrate approved pull requests
 
-Treat `合并收尾` and the expanded global `/prompts:integrate` prompt as explicit merge authorization for the current turn only. Limit the operation to the current repository and any scope the user supplied.
+Treat `合并收尾` and the expanded `/prompts:integrate` (Codex) or `/integrate` (Claude Code) shortcut as explicit merge authorization for the current turn only. Limit the operation to the current repository and any scope the user supplied.
 
 1. Fetch current GitHub state; do not decide from a stale local snapshot.
 2. Select open, non-draft PRs that have all required approvals.
