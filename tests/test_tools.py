@@ -573,6 +573,30 @@ class AgenticWorkflowConfiguratorTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["reason"], "unsafe_destination")
             self.assertEqual(list(outside.iterdir()), [])
 
+    def test_symlinked_github_transaction_cleanup_is_rejected_without_external_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            container = Path(directory)
+            root = container / "repository"
+            outside = container / "outside"
+            root.mkdir()
+            outside.mkdir()
+            self.assertEqual(run(["git", "init", "-q"], root).returncode, 0)
+            transaction = outside / ".agent-project-bootstrap-workflow-transaction"
+            transaction.mkdir()
+            sentinel = transaction / "preserve-me"
+            sentinel.write_text("external content\n", encoding="utf-8")
+            try:
+                os.symlink(outside, root / ".github", target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symbolic links unavailable: {error}")
+
+            result = run(agentic_command(root, "--apply"), root)
+
+            self.assertEqual(result.returncode, 6)
+            self.assertEqual(json.loads(result.stdout)["reason"], "unsafe_destination")
+            self.assertTrue(sentinel.is_file())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "external content\n")
+
     def test_conflict_refuses_all_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

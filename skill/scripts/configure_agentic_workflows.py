@@ -278,11 +278,14 @@ def recover_workflow_transaction(repository: Path) -> bool:
 
 
 def _recover_workflow_transaction(repository: Path) -> bool:
+    # Validate the repository-owned destination before looking for or cleaning a
+    # transaction.  Otherwise an untrusted `.github` symlink could make the
+    # missing-manifest cleanup below remove files outside the repository.
+    destination = validate_destination(repository)
     loaded = load_workflow_transaction(repository)
     if loaded is None:
         return False
     transaction, entries = loaded
-    destination = validate_destination(repository)
 
     for entry in entries:
         name = str(entry["name"])
