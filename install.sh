@@ -162,7 +162,8 @@ if [ "$with_global_rule" -eq 1 ]; then
     printf 'Refusing to update %s: managed block markers are incomplete or duplicated.\n' "$rules_file" >&2
     exit 1
   fi
-  cat >>"$rules_temp" <<'EOF'
+  block_rendered="$(mktemp)"
+  cat >"$block_rendered" <<'EOF'
 
 <!-- agent-project-bootstrap:start -->
 ## Agent Project Workflow
@@ -179,10 +180,10 @@ if [ "$with_global_rule" -eq 1 ]; then
 - Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 EOF
-  rules_final="$(mktemp)"
-  sed -e "s|__INTEGRATE_COMMAND__|$integrate_command|g" -e "s|__REPO_RULES_FILE__|$repo_rules_file|g" "$rules_temp" >"$rules_final"
-  cp "$rules_final" "$rules_file"
-  rm -f "$rules_temp" "$rules_final"
+  sed -e "s|__INTEGRATE_COMMAND__|$integrate_command|g" -e "s|__REPO_RULES_FILE__|$repo_rules_file|g" "$block_rendered" >>"$rules_temp"
+  rm -f "$block_rendered"
+  cp "$rules_temp" "$rules_file"
+  rm -f "$rules_temp"
   printf 'Added or updated the optional global project-workflow rule in %s\n' "$rules_file"
 fi
 

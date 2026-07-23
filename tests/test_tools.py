@@ -481,6 +481,45 @@ class ClaudeInstallerTests(unittest.TestCase):
             self.assertEqual(rules_file.read_text(encoding="utf-8"), original)
 
 
+@unittest.skipIf(os.name == "nt", "POSIX installer test")
+class PlaceholderLeakTests(unittest.TestCase):
+    """The managed-block placeholder substitution must never touch user content
+    outside the block, and must stay in sync between the codex and claude targets.
+    """
+
+    def test_placeholders_outside_managed_block_are_preserved(self) -> None:
+        cases = [
+            ("codex", "AGENTS.md", ["--codex-home"]),
+            ("claude", "CLAUDE.md", ["--target", "claude", "--claude-home"]),
+        ]
+        for target, rules_name, home_flags in cases:
+            with self.subTest(target=target):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / "home"
+                    root.mkdir(parents=True)
+                    rules = root / rules_name
+                    user_line = "keep __INTEGRATE_COMMAND__ and __REPO_RULES_FILE__ verbatim"
+                    rules.write_text("header line\n" + user_line + "\n", encoding="utf-8")
+
+                    cmd = ["sh", str(REPOSITORY / "install.sh"), "--source", str(REPOSITORY)]
+                    cmd += home_flags
+                    cmd += [str(root), "--with-global-rule"]
+                    result = run(cmd, REPOSITORY)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    content = rules.read_text(encoding="utf-8")
+                    # User content outside the managed block is byte-for-byte intact.
+                    self.assertIn("header line", content)
+                    self.assertIn(user_line, content)
+                    # The managed block itself rendered to the target-correct value.
+                    if target == "codex":
+                        self.assertIn("`/prompts:integrate`", content)
+                        self.assertIn("repository `AGENTS.md`", content)
+                    else:
+                        self.assertIn("`/integrate`", content)
+                        self.assertIn("repository `CLAUDE.md`", content)
+
+
 class SkillContractTests(unittest.TestCase):
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
         skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
