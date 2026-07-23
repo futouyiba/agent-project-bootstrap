@@ -2,15 +2,15 @@ version: 5
 profile: delivery
 task_system: github
 workflow_mode: bootstrap_and_daily
-github_project: null
-github_project_automation: not_configured
+github_project: https://github.com/users/futouyiba/projects/3
+github_project_automation: configured
 managed_mode:
-  enabled: false
-  level: off
-  goal_scope: null
-  supervisor: null
-  heartbeat: null
-  local_client_required: pending
+  enabled: true
+  level: supervised
+  goal_scope: Issue #7 and dependency pull-request chain (#6, #8)
+  supervisor: Codex local recurring automation (agent-project-bootstrap-supervised-delivery)
+  heartbeat: every 30 minutes
+  local_client_required: true
   retry_limit: 3
   automatic_review: pending
   merge_policy: per_turn
