@@ -9,6 +9,7 @@ claude_root="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
 target="codex"
 with_global_rule=0
 temporary_dir=""
+install_staging=""
 
 usage() {
   printf '%s\n' "Usage: install.sh [--source PATH] [--target codex|claude] [--codex-home PATH] [--claude-home PATH] [--with-global-rule]"
@@ -75,6 +76,9 @@ cleanup() {
   if [ -n "$temporary_dir" ] && [ -d "$temporary_dir" ]; then
     rm -rf "$temporary_dir"
   fi
+  if [ -n "$install_staging" ] && [ -d "$install_staging" ]; then
+    rm -rf "$install_staging"
+  fi
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -96,31 +100,45 @@ else
   package_root="$temporary_dir/agent-project-bootstrap-$repository_ref"
 fi
 
-skill_source="$package_root/skill"
+bootstrap_skill_source="$package_root/skill"
+issue_loop_skill_source="$package_root/skills/agent-issue-loop"
+pr_loop_skill_source="$package_root/skills/agent-pr-loop"
 command_source="$package_root/$command_source_relative"
 
-# Source validity: a shared SKILL.md plus the target client's required files.
-if [ ! -f "$skill_source/SKILL.md" ] || [ ! -f "$command_source" ]; then
-  printf 'Invalid source: expected an installable skill at %s\n' "$skill_source" >&2
+# Validate every source before replacing any installed Skill.
+if [ ! -f "$bootstrap_skill_source/SKILL.md" ] || [ ! -f "$issue_loop_skill_source/SKILL.md" ] ||
+  [ ! -f "$pr_loop_skill_source/SKILL.md" ] ||
+  [ ! -f "$command_source" ]; then
+  printf 'Invalid source: expected installable Skills at %s, %s, and %s\n' \
+    "$bootstrap_skill_source" "$issue_loop_skill_source" "$pr_loop_skill_source" >&2
   exit 1
 fi
-if [ "$target" = "codex" ] && [ ! -f "$skill_source/agents/openai.yaml" ]; then
-  printf 'Invalid source: codex target requires %s\n' "$skill_source/agents/openai.yaml" >&2
+if [ "$target" = "codex" ] &&
+  { [ ! -f "$bootstrap_skill_source/agents/openai.yaml" ] ||
+    [ ! -f "$issue_loop_skill_source/agents/openai.yaml" ] ||
+    [ ! -f "$pr_loop_skill_source/agents/openai.yaml" ]; }; then
+  printf 'Invalid source: codex target requires agents/openai.yaml in all Skills\n' >&2
   exit 1
 fi
 
 skills_root="$install_root/skills"
-destination="$skills_root/agent-project-bootstrap"
 mkdir -p "$skills_root"
+install_staging="$(mktemp -d)"
+cp -R "$bootstrap_skill_source" "$install_staging/agent-project-bootstrap"
+cp -R "$issue_loop_skill_source" "$install_staging/agent-issue-loop"
+cp -R "$pr_loop_skill_source" "$install_staging/agent-pr-loop"
 
-if [ -e "$destination" ]; then
-  backup="$destination.backup.$(date +%Y%m%d%H%M%S).$$"
-  mv "$destination" "$backup"
-  printf 'Existing installation backed up to %s\n' "$backup"
-fi
-
-cp -R "$skill_source" "$destination"
-printf 'Installed agent-project-bootstrap to %s\n' "$destination"
+for skill_name in agent-project-bootstrap agent-issue-loop agent-pr-loop; do
+  destination="$skills_root/$skill_name"
+  if [ -e "$destination" ]; then
+    backup="$destination.backup.$(date +%Y%m%d%H%M%S).$$"
+    mv "$destination" "$backup"
+    printf 'Existing installation backed up to %s\n' "$backup"
+  fi
+  mv "$install_staging/$skill_name" "$destination"
+  test -f "$destination/SKILL.md"
+  printf 'Installed %s to %s\n' "$skill_name" "$destination"
+done
 
 command_root="$install_root/$command_dir_name"
 command_destination="$command_root/integrate.md"
@@ -173,11 +191,14 @@ if [ "$with_global_rule" -eq 1 ]; then
 - Do not create bootstrap files until the user authorizes the proposed scope.
 - Accept natural-language task descriptions and never require the user to know an Issue number. Resolve one clear match, shortlist ambiguous matches, and propose or create missing work according to repository policy.
 - Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管` as shortcuts for the `agent-project-bootstrap` flow. Bare `托管` means the current repository and current explicit goal, active Issue, or active PR; ask only when that scope is ambiguous.
-- Treat an explicit `合并收尾` request or the expanded `__INTEGRATE_COMMAND__` prompt as merge authorization for that turn only. Merge only qualifying PRs in the current repository; never deploy or publish.
+- Treat `开始做这个Issue`, `解决这个Issue`, `搞定Issue`, `把当前Issue跑完`, explicit `agent-issue-loop`, or natural equivalents as invocation of the installed `agent-issue-loop` Skill. Keep one main coordinator through readiness, implementation, PR handoff, verified merge, and normal Issue closure; delegate its single PR to `agent-pr-loop`.
+- Treat `搞定PR`, `搞定这个PR`, `搞定当前PR`, explicit `agent-pr-loop`, or natural equivalents as invocation of the installed `agent-pr-loop` Skill. For one selected PR, complete the comments/review/fix/current-head-CI loop and automatically merge when every gate passes; pause only at recorded human gates or an explicit no-merge instruction.
+- In a single-owner repository where Agents share one GitHub account, use a current-head substantive COMMENT review as Agent-review evidence. Do not wait for or manufacture self-approval unless repository or platform policy requires another identity.
+- Treat an explicit `合并收尾` request or the expanded `__INTEGRATE_COMMAND__` prompt as merge authorization for that generic integration turn only. For one PR delegated to `agent-pr-loop`, use its exact-head automatic-merge policy instead. Never deploy or publish.
 - When repository policy enables managed mode, use one durable supervisor to refresh GitHub on each scheduled wake-up and continue routine review/CI handoffs without asking the user to relay messages. Automatic merge still requires the repository's explicit standing policy.
 - When the user requests true GitHub event-driven handoffs, use the Skill's GitHub Agentic Workflows profile. It is repository-scoped, opt-in, and staged on first installation; the global rule never enables workflows, secrets, live writes, or merge.
 - Keep repository-specific Project URLs, status names, test commands, and standing authorization in the repository `__REPO_RULES_FILE__`; repository rules take precedence.
-- Global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
+- Outside the bounded `agent-issue-loop` and `agent-pr-loop` completion paths, global guidance alone never authorizes scope changes, deletion, merge, publishing, or deployment.
 <!-- agent-project-bootstrap:end -->
 EOF
   sed -e "s|__INTEGRATE_COMMAND__|$integrate_command|g" -e "s|__REPO_RULES_FILE__|$repo_rules_file|g" "$block_rendered" >>"$rules_temp"
@@ -189,9 +210,9 @@ fi
 
 if [ "$target" = "claude" ]; then
   printf '%s\n' "Restart Claude Code if the skill does not appear immediately."
-  printf '%s\n' "In Claude Code the agent-project-bootstrap skill is available automatically; describe the work directly, or run /integrate to merge approved PRs."
+  printf '%s\n' "In Claude Code the three Skills are available automatically; describe the Issue or PR directly, or run /integrate to merge approved PRs."
 else
   printf '%s\n' "Restart ChatGPT/Codex if the skill does not appear immediately."
-  printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap in Codex."
+  printf '%s\n' "Invoke with @agent-project-bootstrap in ChatGPT or \$agent-project-bootstrap, \$agent-issue-loop, and \$agent-pr-loop in Codex."
   printf '%s\n' "In Codex CLI/IDE, use /prompts:integrate for the deprecated custom-prompt shortcut."
 fi

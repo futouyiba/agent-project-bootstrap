@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **collaboration specification distributed as a Skill for both Codex/ChatGPT and Claude Code**, not a runnable application. There is no runtime, no dependencies, and no build step. The deliverables are:
 
 - a public Skill under `skill/` (one shared source, copied verbatim into either a user's `$CODEX_HOME/skills/agent-project-bootstrap` for Codex/ChatGPT or `~/.claude/skills/agent-project-bootstrap` for Claude Code);
-- a Codex `/prompts:integrate` source under `prompts/integrate.md` and a Claude Code `/integrate` slash command under `commands/integrate.md`;
+- a Codex `/prompts:integrate` source under `prompts/integrate.md` (uses `$$agent-project-bootstrap` invocation) and a Claude Code `/integrate` slash command under `commands/integrate.md` (uses `$ARGUMENTS` placeholder); both are thin authorization shells — the real merge logic lives in the Skill's daily-flow integration procedure;
 - three stdlib-only Python helper scripts under `skill/scripts/`;
 - two cross-platform installers (`install.sh`, `install.ps1`) that take a `--target codex|claude` / `-Target` flag to select the destination client;
 - Markdown templates and reference docs that bootstrap writes into target repositories (`templates/AGENTS.project.md` for Codex, `templates/CLAUDE.project.md` for Claude Code).
@@ -21,6 +21,7 @@ Tests (Python 3.12 in CI; use `python` on Windows, `python3` elsewhere):
 ```sh
 python3 -m unittest discover -s tests -v          # full suite
 python3 tests/test_tools.py AuditTests -v          # one class
+python3 tests/test_tools.py AgenticWorkflowConfiguratorTests -v   # another class
 python3 tests/test_tools.py AuditTests.test_stack_and_coordination_detection   # one method
 ```
 
@@ -96,7 +97,17 @@ Both installers, when given `--with-global-rule`/`-WithGlobalRule`, inject/upgra
 
 ### The test suite pins documented behavior
 
-`tests/test_tools.py` contains not just script/installer behavior tests but `SkillContractTests`, which asserts that required strings exist in `SKILL.md`, the `references/*.md`, the `assets/github-agentic-workflows/*.md`, `templates/AGENTS.project.md`, `templates/CLAUDE.project.md`, `commands/integrate.md`, and `.codex/agent-project-bootstrap.yml` (e.g. `version: 5`, `merge_policy: per_turn`, no `merge-pull-request` in any worker, exact counts of `required-labels: [agent:managed]`). `PosixInstallerTests` covers the `codex` target and `ClaudeInstallerTests` mirrors it for the `claude` target. **Editing any of those files can break the build** — update the tests in the same change when the contract intentionally evolves.
+`tests/test_tools.py` contains seven test classes:
+
+- `AuditTests` — script behavior for non-repo and normal-repo scenarios.
+- `SnapshotTests` — offline cache reading.
+- `AgenticWorkflowConfiguratorTests` — plan, apply, idempotency, staged→live promotion, conflict detection, symlink rejection, and first-install live refusal.
+- `PosixInstallerTests` — POSIX installer for the `codex` target (including marker-integrity edge cases).
+- `ClaudeInstallerTests` — POSIX installer for the `claude` target (mirrors the codex tests, verifies `CLAUDE.md` and `/integrate` command placement).
+- `PlaceholderLeakTests` — verifies that `__INTEGRATE_COMMAND__` and `__REPO_RULES_FILE__` substitution never touches user content outside the managed block, for both targets.
+- `SkillContractTests` — asserts required strings in `SKILL.md`, the `references/*.md`, the `assets/github-agentic-workflows/*.md`, `templates/AGENTS.project.md`, `templates/CLAUDE.project.md`, `commands/integrate.md`, and `.codex/agent-project-bootstrap.yml` (e.g. `version: 5`, `merge_policy: per_turn`, no `merge-pull-request` in any worker, exact counts of `required-labels: [agent:managed]`).
+
+**Editing any of those files can break the build** — update the tests in the same change when the contract intentionally evolves.
 
 ## Conventions (from `AGENTS.md`)
 
@@ -109,4 +120,6 @@ Both installers, when given `--with-global-rule`/`-WithGlobalRule`, inject/upgra
 
 ## Platform notes
 
-This machine is Windows. Use the `python` (not `python3`) launcher and the PowerShell installer. The Bash tool here is Git Bash (POSIX), so `install.sh` and the `sh`-based installer test also run locally; prefer absolute paths because `cd` in a compound command can trigger a permission prompt.
+This machine is **macOS**. Use `python3` and `install.sh`; the PowerShell installer (`install.ps1`) is for Windows only. Absolute paths are preferred because `cd` in a compound command can trigger a permission prompt.
+
+This repository dogfoods its own workflow: it has GitHub Agentic Workflows installed under `.github/workflows/agent-*.md` (source) and `.github/workflows/agent-*.lock.yml` (compiled), plus a dedicated `agentics-maintenance.yml` for CI maintenance. The `.codex/agent-project-bootstrap.yml` marker records its own bootstrap config (`version: 5`, `profile: delivery`). When making changes, treat these as live evidence that the contract works end-to-end.

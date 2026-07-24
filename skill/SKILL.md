@@ -1,6 +1,6 @@
 ---
 name: agent-project-bootstrap
-description: Initialize or migrate a Git repository for coordinated agent development, operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow, configure a bounded managed supervisor, and optionally install staged GitHub Agentic Workflows for event-driven handoffs. Use when starting or standardizing a project, when the user describes work without an Issue number, asks for GitHub-driven agent orchestration, or says 记一下, 收需求, 开始做, 收尾, 合并收尾, or 托管.
+description: Initialize or migrate a Git repository for coordinated agent development, operate its daily GitHub Issue, Project, pull-request, CI, and worktree flow, configure a bounded managed supervisor, and optionally install staged GitHub Agentic Workflows for event-driven handoffs. Use when starting or standardizing a project, when the user describes work without an Issue number, asks for GitHub-driven agent orchestration, or says 记一下, 收需求, 开始做, 搞定 Issue, 收尾, 合并收尾, or 托管.
 ---
 
 # Agent Project Workflow
@@ -86,9 +86,11 @@ Never require the user to supply an Issue number.
 
 - **记一下** — capture an uncertain idea as a Project draft item in `Backlog` when supported; do not silently turn speculation into committed work.
 - **收需求** — extract, deduplicate, and search a batch of clear items; present one compact confirmation before creating anything not already authorized.
-- **开始做 + natural-language description** — resolve the matching Issue, move it to `In progress`, create a branch, implement, validate, and open a linked PR when authorized.
+- **开始做 + natural-language description** — resolve the matching Issue, then delegate its complete delivery to the installed `$agent-issue-loop` Skill.
+- **搞定 Issue / agent-issue-loop + optional Issue** — delegate one selected Issue to `$agent-issue-loop`. Keep one main coordinator across readiness, implementation, validation, PR handoff, verified merge, and normal Issue closure; its single PR is completed by `$agent-pr-loop`.
 - **收尾** — inspect the linked Issue, PR, review, and CI; record evidence and move to the appropriate status, but ask before merge, deployment, deletion, or other gated actions.
 - **合并收尾 + optional scope** — treat the user's invocation as merge authorization for this turn only. Read the integration procedure in [daily project flow](references/daily-project-flow.md), merge only qualifying PRs in the current repository, and never deploy or publish.
+- **搞定 PR / agent-pr-loop + optional PR** — delegate one selected PR to the installed `$agent-pr-loop` Skill. It reads the complete PR conversation, runs the implementation/review/current-head-CI loop, and automatically merges when every gate passes. It pauses only at explicit human gates or a current-turn no-merge instruction.
 - **托管 + optional goal or scope** — configure or resume the bounded supervisor in [managed autopilot](references/managed-autopilot.md). With no suffix, use the current repository and current explicit goal, active Issue, or active PR. If that scope is ambiguous, ask one concise question. Consolidate any missing schedule and standing merge-policy choices into one setup confirmation, then stop requiring the user to relay routine Issue, PR, review, and CI updates. Treat `托管这个项目` and natural equivalents identically.
 
 ## Managed mode
@@ -123,7 +125,8 @@ Once a task is clearly selected and repository policy adopts this workflow, the 
 - create its task branch;
 - create and link a PR;
 - move it to `In review`;
-- record validation results.
+- record validation results;
+- close a selected Issue normally after `$agent-issue-loop` verifies its qualifying merge and acceptance evidence.
 
 Ask before:
 
@@ -131,7 +134,7 @@ Ask before:
 - changing scope or acceptance criteria;
 - closing as `Not planned`;
 - deleting records;
-- merging a PR, unless the user explicitly invoked `合并收尾` or otherwise authorized the merge for this turn;
+- merging a PR through the generic daily flow, unless the user explicitly invoked `合并收尾` or otherwise authorized the merge for this turn. For one PR explicitly delegated to `$agent-pr-loop`, follow its exact-head automatic-merge and human-gate policy instead;
 - publishing or deploying.
 
 Repository policy may narrow this authorization. Tool and platform approval prompts still apply and cannot be bypassed.

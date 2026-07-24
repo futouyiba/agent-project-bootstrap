@@ -27,13 +27,15 @@ Bootstrap must replace every placeholder below with a discovered value, or write
 
 - The user does not need to know an Issue number. Search the fresh local snapshot and GitHub from their description.
 - For one clear match, select it and report its number. For several plausible matches, show the best two or three and ask one question.
-- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管` as workflow shortcuts described by `agent-project-bootstrap`. Bare `托管` means the current repository and current explicit goal, active Issue, or active PR; ask only when that scope is ambiguous.
+- Treat `记一下`, `收需求`, `开始做`, `收尾`, `合并收尾`, and `托管` as workflow shortcuts described by `agent-project-bootstrap`. Treat `搞定 Issue`, explicit `agent-issue-loop`, and natural equivalents as invocation of the installed `$agent-issue-loop` Skill; keep one coordinator through readiness, implementation, delegated PR completion, and verified normal closure. Treat `搞定 PR`, explicit `agent-pr-loop`, and natural equivalents as invocation of the installed `$agent-pr-loop` Skill. Bare `托管` means the current repository and current explicit goal, active Issue, or active PR; ask only when that scope is ambiguous.
 
 ## Standing authorization
 
 - For a clearly selected task, the agent may read GitHub state, move `Ready` to `In progress`, create a task branch, open and link a PR, move to `In review`, and record validation results.
 - Ask before creating work not clearly implied by the conversation, changing scope or acceptance criteria, closing as `Not planned`, deleting records, merging, publishing, or deploying.
 - `合并收尾` explicitly authorizes merging qualifying PRs for that turn only; it never authorizes deployment or publishing.
+- For one PR delegated to `$agent-pr-loop`, all-green exact-head review and CI gates authorize its normal automatic merge. Pause only at the recorded human gates or an explicit current-turn no-merge instruction.
+- For one Issue delegated to `$agent-issue-loop`, default to one primary PR, split independent deliveries into linked child Issues, and close the Issue normally only after verified merge and acceptance coverage. Closing as `Not planned` remains a human gate.
 - Platform approval prompts still apply. A direct user request can grant narrower or broader authorization for that request.
 
 ## Managed supervisor
@@ -78,3 +80,4 @@ When enabled, GitHub Agentic Workflows may route only items explicitly marked wi
 - Use a dedicated branch and pull request for each independently deliverable Issue.
 - Run the repository's documented validation commands and report exact results.
 - Do not merge while required checks fail or without the required approval.
+- During a PR loop, push only its exact head. After a server-side merge, verify and fetch; never push the merged head or stale local base, and never use `git push --all` or `git push --mirror` as cleanup.

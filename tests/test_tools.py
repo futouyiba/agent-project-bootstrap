@@ -245,7 +245,21 @@ class PosixInstallerTests(unittest.TestCase):
             first = run(command, REPOSITORY)
             self.assertEqual(first.returncode, 0, first.stderr)
             destination = codex_root / "skills" / "agent-project-bootstrap"
+            issue_loop_destination = codex_root / "skills" / "agent-issue-loop"
+            pr_loop_destination = codex_root / "skills" / "agent-pr-loop"
             self.assertTrue((destination / "SKILL.md").exists())
+            self.assertTrue((issue_loop_destination / "SKILL.md").exists())
+            self.assertTrue((issue_loop_destination / "agents" / "openai.yaml").exists())
+            self.assertIn(
+                "ISSUE_SELECTED",
+                (issue_loop_destination / "SKILL.md").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((pr_loop_destination / "SKILL.md").exists())
+            self.assertTrue((pr_loop_destination / "agents" / "openai.yaml").exists())
+            self.assertIn(
+                "git push --all",
+                (pr_loop_destination / "SKILL.md").read_text(encoding="utf-8"),
+            )
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
             self.assertTrue((destination / "assets" / "codex-managed-supervisor.md").exists())
             self.assertTrue((destination / "scripts" / "configure_agentic_workflows.py").exists())
@@ -275,10 +289,61 @@ class PosixInstallerTests(unittest.TestCase):
             self.assertIn("合并收尾", agents)
             self.assertIn("and `托管` as shortcuts", agents)
             self.assertIn("Bare `托管` means the current repository", agents)
+            self.assertIn("explicit `agent-issue-loop`", agents)
+            self.assertIn("verified merge, and normal Issue closure", agents)
+            self.assertIn("explicit `agent-pr-loop`", agents)
+            self.assertIn("automatically merge when every gate passes", agents)
+            self.assertIn("Do not wait for or manufacture self-approval", agents)
             self.assertIn("one durable supervisor", agents)
             self.assertIn("GitHub Agentic Workflows profile", agents)
             self.assertIn("staged on first installation", agents)
             self.assertEqual(len(list((codex_root / "prompts").glob("integrate.md.backup.*"))), 1)
+            self.assertEqual(
+                len(list((codex_root / "skills").glob("agent-issue-loop.backup.*"))),
+                1,
+            )
+            self.assertEqual(
+                len(list((codex_root / "skills").glob("agent-pr-loop.backup.*"))),
+                1,
+            )
+
+    def test_missing_companion_skill_fails_before_replacing_existing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "package"
+            (package / "skill" / "agents").mkdir(parents=True)
+            (package / "prompts").mkdir()
+            (package / "skill" / "SKILL.md").write_text(
+                "---\nname: agent-project-bootstrap\ndescription: test\n---\n",
+                encoding="utf-8",
+            )
+            (package / "skill" / "agents" / "openai.yaml").write_text(
+                "interface: {}\n",
+                encoding="utf-8",
+            )
+            (package / "prompts" / "integrate.md").write_text("test\n", encoding="utf-8")
+
+            codex_root = root / "codex"
+            existing = codex_root / "skills" / "agent-project-bootstrap"
+            existing.mkdir(parents=True)
+            sentinel = existing / "user-owned.txt"
+            sentinel.write_text("preserve\n", encoding="utf-8")
+
+            result = run(
+                [
+                    "sh",
+                    str(REPOSITORY / "install.sh"),
+                    "--source",
+                    str(package),
+                    "--codex-home",
+                    str(codex_root),
+                ],
+                REPOSITORY,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("expected installable Skills", result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
 
     def test_partial_global_rule_fails_without_losing_user_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -430,7 +495,11 @@ class ClaudeInstallerTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
 
             destination = claude_root / "skills" / "agent-project-bootstrap"
+            issue_loop_destination = claude_root / "skills" / "agent-issue-loop"
+            pr_loop_destination = claude_root / "skills" / "agent-pr-loop"
             self.assertTrue((destination / "SKILL.md").exists())
+            self.assertTrue((issue_loop_destination / "SKILL.md").exists())
+            self.assertTrue((pr_loop_destination / "SKILL.md").exists())
             self.assertTrue((destination / "scripts" / "snapshot_github.py").exists())
             self.assertTrue(
                 (destination / "assets" / "github-agentic-workflows" / "agent-supervisor.md").exists()
@@ -451,6 +520,8 @@ class ClaudeInstallerTests(unittest.TestCase):
             self.assertEqual(rules.count("<!-- agent-project-bootstrap:start -->"), 1)
             self.assertIn("one durable supervisor", rules)
             self.assertIn("repository `CLAUDE.md`", rules)
+            self.assertIn("explicit `agent-issue-loop`", rules)
+            self.assertIn("explicit `agent-pr-loop`", rules)
             self.assertIn("`/integrate`", rules)
             self.assertNotIn("/prompts:integrate", rules)
 
@@ -521,6 +592,55 @@ class PlaceholderLeakTests(unittest.TestCase):
 
 
 class SkillContractTests(unittest.TestCase):
+    def test_companion_issue_loop_contract(self) -> None:
+        issue_loop = (REPOSITORY / "skills" / "agent-issue-loop" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        metadata = (
+            REPOSITORY / "skills" / "agent-issue-loop" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
+        bootstrap = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        daily_flow = (
+            REPOSITORY / "skill" / "references" / "daily-project-flow.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("name: agent-issue-loop", issue_loop)
+        self.assertIn("ISSUE_SELECTED", issue_loop)
+        self.assertIn("ISSUE_COMPLETION_VERIFIED", issue_loop)
+        self.assertIn("one primary PR", issue_loop)
+        self.assertIn("linked child Issues", issue_loop)
+        self.assertIn("only coordinator", issue_loop)
+        self.assertIn("$agent-pr-loop", issue_loop)
+        self.assertIn("MERGED_VERIFIED", issue_loop)
+        self.assertIn("NO_CODE_DELIVERY", issue_loop)
+        self.assertIn("normal Issue closure", issue_loop)
+        self.assertIn('display_name: "Agent Issue Loop"', metadata)
+        self.assertIn("$agent-issue-loop", bootstrap)
+        self.assertIn("## Complete one Issue", daily_flow)
+
+    def test_companion_pr_loop_contract(self) -> None:
+        pr_loop = (REPOSITORY / "skills" / "agent-pr-loop" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        metadata = (
+            REPOSITORY / "skills" / "agent-pr-loop" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
+        bootstrap = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
+        daily_flow = (
+            REPOSITORY / "skill" / "references" / "daily-project-flow.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("name: agent-pr-loop", pr_loop)
+        self.assertIn("Agent-Review: PASS", pr_loop)
+        self.assertIn("local HEAD == remote PR head == GitHub PR head", pr_loop)
+        self.assertIn("automatic merge", pr_loop)
+        self.assertIn("git push --all", pr_loop)
+        self.assertIn("git push --mirror", pr_loop)
+        self.assertIn("Do not push the PR head after merge", pr_loop)
+        self.assertIn("display_name: \"Agent PR Loop\"", metadata)
+        self.assertIn("delegate one selected PR", bootstrap)
+        self.assertIn("## Complete one pull request", daily_flow)
+
     def test_one_skill_contains_bootstrap_and_daily_modes(self) -> None:
         skill = (REPOSITORY / "skill" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Bootstrap mode", skill)
@@ -528,7 +648,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("bootstrap mode first", skill)
         self.assertIn("Preserve the pending task description", skill)
         self.assertIn("Never require the user to supply an Issue number", skill)
-        for shortcut in ("记一下", "收需求", "开始做", "收尾", "合并收尾", "托管"):
+        for shortcut in ("记一下", "收需求", "开始做", "搞定 Issue", "收尾", "合并收尾", "托管"):
             self.assertIn(shortcut, skill)
 
         daily_flow = (REPOSITORY / "skill" / "references" / "daily-project-flow.md").read_text(
